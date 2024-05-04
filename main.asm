@@ -16,23 +16,26 @@ UP_SKY   equ 0C7h
 
 BG       equ BLACK
 
-FLOOR_y  equ 180 ; 130
-FLOOR_x  equ 3
-
-CYCLES   equ 3000
+FLOOR_y  equ 200 / 2
+FLOOR_x  equ 320 / 2
 
 MARIO_w  equ 14
 MARIO_h  equ 18
+MARIO_bg equ 255
 
+ALIEN_h  equ 26
 ALIEN_w  equ 21
-ALIEN_h  equ 30
+ALIEN_bg equ 255
+
+CYCLES   equ 50000
 
 CHASE_w  equ 5
 CHASE_h  equ 5
 
+GAME_t   equ 50
 GAME_w   equ 320
 GAME_h   equ 200
-GAME_tps equ 20
+GAME_tps equ 40
 GAME_mpt equ GAME_tps * 60
 MENU_mpt equ 1
 
@@ -55,8 +58,8 @@ DATASEG
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    MARIO_x     dw FLOOR_x
-    MARIO_y     dw FLOOR_y
+    MARIO_x     dw FLOOR_x - (MARIO_w / 2)
+    MARIO_y     dw FLOOR_y - (MARIO_h / 2)
     MARIO_dir   db 0
     MARIO_speed db 1
 
@@ -79,10 +82,16 @@ DATASEG
     BMP_menu           db 'menu.bmp' , 0
     BMP_menu_guide     db 'menug.bmp' , 0
     BMP_menu_play      db 'menup.bmp' , 0
+    BMP_tools_bg       db 'toolsbg.bmp' , 0
+    BMP_robot          db 'robot.bmp' , 0
+    BMP_mario          db 'mario.bmp' , 0
+    BMP_grenade        db 'grnd.bmp' , 0
+    BMP_black_hole     db 'bh.bmp' , 0
+    BMP_alien          db 'alien.bmp' , 0
 
-    BMP_handle   dw ?
-    BMP_header   db 54 dup(0)
-    BMP_palette  db 400h dup(0)
+    BMP_handle     dw ?
+    BMP_header     db 54 dup(0)
+    BMP_palette    db 400h dup(0)
 
     BMP_error_file         db 0
 
@@ -91,10 +100,10 @@ DATASEG
     BMP_w dw ?
     BMP_h dw ?
 
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    BMP_skip_color     db 0
+    BMP_should_skip    db 0
 
-    INFO_starting            db 'Starting Up...', 0
-    ERROR_cycles             db 'CPU cycles has to be 48,000!', 0; Run cycles=3000 to set it.", 0
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     ERROR_opening_bmp_file   db 'Error when opening BMP file.', 0dh, 0ah, '$'
     ERROR_too_many_instances db 'Too many instances.', 0dh, 0ah, '$'
@@ -125,18 +134,7 @@ DATASEG
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    arrow db 0, 0, 0, 2, 2, 2, 2, 0, 0, 0 ; 10x10
-          db 0, 0, 0, 2, 2, 2, 2, 0, 0, 0
-          db 0, 0, 0, 2, 2, 2, 2, 0, 0, 0
-          db 0, 0, 0, 2, 2, 2, 2, 0, 0, 0
-          db 0, 0, 0, 2, 2, 2, 2, 0, 0, 0
-          db 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
-          db 0, 2, 2, 2, 2, 2, 2, 2, 2, 0
-          db 0, 0, 2, 2, 2, 2, 2, 2, 0, 0
-          db 0, 0, 0, 2, 2, 2, 2, 0, 0, 0
-          db 0, 0, 0, 0, 2, 2, 0, 0, 0, 0
-
-    alien db 21 dup(BG) ; 21x?
+    alien db 21 dup(BG) ; 21x26
           db 9  dup(BG), 3 dup(BLACK), 9  dup(BG)
           db 7  dup(BG), 2 dup(BLACK), 2  dup(L_GREEN), 1 dup(GREEN)  , 2 dup(BLACK)  , 7 dup(BG)
           db 6  dup(BG), 1 dup(BLACK), 5  dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 6 dup(BG)
@@ -202,20 +200,12 @@ start:
 
     call ShowCursor
 
-    mov ax, seg OnCursorEvent
-    mov es, ax
-    mov ax, 0Ch
-    mov dx, offset OnCursorEvent
-    mov cx, 1111b
-    int 33h
-
-    analyzing_text:
-        push offset BMP_starting
-        push 0
-        push 0
-        push 320
-        push 200
-        call RenderBmp
+    push offset BMP_starting
+    push 0
+    push 0
+    push 320
+    push 200
+    call RenderBmp
 
     mov ax, 40h
     mov es, ax
@@ -236,19 +226,25 @@ start:
     jne cpu_cycles_error
 
 skip_err:
+    mov ax, seg OnCursorEvent
+    mov es, ax
+    mov ax, 0Ch
+    mov dx, offset OnCursorEvent
+    mov cx, 1111b
+    int 33h
+
     l:
         call OnGameTick
     jmp l
 
-    cpu_cycles_error:
-        push offset BMP_cycles
-        push 0
-        push 0
-        push 320
-        push 200
-        call RenderBmp
-        call AwaitKeypress
-        call ExitGame
+cpu_cycles_error:
+    push offset BMP_cycles
+    push 0
+    push 0
+    push 320
+    push 200
+    call RenderBmp
+    call AwaitKeypress
 
     call ExitGame
 
@@ -901,6 +897,13 @@ proc SetupGame
     call RestorePalette
     call DrawBackground
 
+    ; push offset BMP_tools_bg
+    ; push 0
+    ; push 0
+    ; push 320
+    ; push 50
+    ; call RenderBmp
+
     @@ret:
 
         ret
@@ -974,7 +977,7 @@ proc OnGameTick
 
     @@up:
         mov ax, [MARIO_y]
-        cmp ax, 0
+        cmp ax, GAME_t
         jng @@cont
 
         dec [MARIO_y]
@@ -1010,8 +1013,6 @@ proc OnGameTick
         jmp @@cont
 
 @@cont:
-    ;call DrawBackground
-
     push [MARIO_x]
     push [MARIO_y]
     call DrawMarioAt
@@ -1134,10 +1135,6 @@ proc HandlePlayerInput
         cmp [GAME_state], 10
         jne @@cont
 
-        ; del key
-        cmp ax, 5300h
-        je @@toggle_speed
-
         ; up arrow
         cmp ah, 48h
         je @@up
@@ -1170,19 +1167,6 @@ proc HandlePlayerInput
 
     @@right:
         mov [MARIO_dir], 4
-        jmp @@cont
-
-    @@toggle_speed:
-        cmp [MARIO_speed], 3
-        je @@one
-
-        ; put 3
-        mov [MARIO_speed], 3
-        jmp @@cont
-
-        ; put 1
-        @@one:
-            mov [MARIO_speed], 1
         jmp @@cont
 
     @@cont:
@@ -1266,12 +1250,16 @@ proc DrawAlienAt
     push cx
     push dx
 
+    ; mov [BMP_skip_color], ALIEN_bg
+    ; mov [BMP_should_skip], 1
+    ; push offset BMP_alien
     push x
     push y
     push ALIEN_w
     push ALIEN_h
     push offset alien
     call DrawMatrixAt
+    ; call RenderBmp
 
 @@ret:
     pop dx
@@ -1310,12 +1298,16 @@ proc DrawMarioAt
     push cx
     push dx
 
+    ; mov [BMP_skip_color], MARIO_bg
+    ; mov [BMP_should_skip], 1
+    ; push offset BMP_mario
     push x
     push y
     push MARIO_w
     push MARIO_h
     push offset mario
     call DrawMatrixAt
+    ; call RenderBmp
 
 @@ret:
     pop dx
@@ -1621,6 +1613,7 @@ proc UndrawRect
     push bp
     mov bp, sp
 
+    push ax
     push si
     push cx
 
@@ -1630,7 +1623,9 @@ proc UndrawRect
     @@draw_loop:
         push si
         push y
-        push h
+        mov ax, h
+        inc ax
+        push ax
         push BG
         call DrawVerticalLine
         inc si
@@ -1639,6 +1634,7 @@ proc UndrawRect
 @@ret:
     pop cx
     pop si
+    pop ax
 
     pop bp
     ret 8
@@ -2246,7 +2242,20 @@ proc ShowBmp
     cld
     mov cx, [BMP_w]
     lea si, [BMP_screen_line]
-    rep movsb
+
+    @@l:
+        mov al, [si]
+        cmp [BMP_should_skip], 1
+        jne @@skip_check
+        cmp al, [BMP_skip_color]
+        je @@cont
+        @@skip_check:
+            mov [es:di], al
+
+        @@cont:
+            inc si
+            inc di
+    loop @@l
 
     pop dx
     pop cx
