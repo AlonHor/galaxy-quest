@@ -19,24 +19,31 @@ BG       equ BLACK
 FLOOR_y  equ 200 / 2
 FLOOR_x  equ 320 / 2
 
-MARIO_w  equ 14
-MARIO_h  equ 18
-MARIO_bg equ 255
+MARIO_w  equ 25
+MARIO_h  equ 25
+MARIO_bg equ 255 ; 255
 
-ALIEN_h  equ 26
-ALIEN_w  equ 21
+ALIEN_h  equ 25
+ALIEN_w  equ 25
 ALIEN_bg equ 255
+
+ROBOT_h  equ 25
+ROBOT_w  equ 25
+ROBOT_bg equ 255
+
+OBJ_bg   equ 255
+OBJ_w    equ 25
+OBJ_h    equ 25
 
 CYCLES   equ 50000
 
 CHASE_w  equ 5
 CHASE_h  equ 5
 
-GAME_t   equ 50
+GAME_t   equ 70
 GAME_w   equ 320
 GAME_h   equ 200
-GAME_tps equ 40
-GAME_mpt equ GAME_tps * 60
+GAME_mpt equ 30000
 MENU_mpt equ 1
 
 DATASEG
@@ -44,13 +51,14 @@ DATASEG
 
     GAME_ticks         dw 0
     GAME_palette       db 300h dup(?)
-    GAME_state         db 0
+    GAME_state         db 30
     GAME_menu_is_hover db 0
     ; 0 - main menu
     ;   1 - guide
     ;   2 - other stuff
     ; 10 - game
     ; 20 - game over
+    ; 30 - starting
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -61,16 +69,21 @@ DATASEG
     MARIO_x     dw FLOOR_x - (MARIO_w / 2)
     MARIO_y     dw FLOOR_y - (MARIO_h / 2)
     MARIO_dir   db 0
-    MARIO_speed db 1
+    MARIO_speed dw 5
 
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ALIEN_i_x   dw FLOOR_x + (ALIEN_w * 2)
+    ALIEN_i_y   dw FLOOR_y + (ALIEN_h * 2)
+    ALIEN_x     dw FLOOR_x + (ALIEN_w * 2)
+    ALIEN_y     dw FLOOR_y + (ALIEN_h * 2)
+    ALIEN_dir   db 0
+    ALIEN_speed dw 2
 
-    CHASE_random_x     dw ?
-    CHASE_random_y     dw ?
-    CHASE_random_color db ?
-    CHASE_points       db ?
-    CHASE_seconds      db ?
-    CHASE_ticks        dw 0
+    ROBOT_i_x   dw GAME_w - ROBOT_w
+    ROBOT_i_y   dw GAME_t + 1
+    ROBOT_x     dw GAME_w - ROBOT_w
+    ROBOT_y     dw GAME_t + 1
+    ROBOT_dir   db 2
+    ROBOT_speed dw 10
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -82,12 +95,14 @@ DATASEG
     BMP_menu           db 'menu.bmp' , 0
     BMP_menu_guide     db 'menug.bmp' , 0
     BMP_menu_play      db 'menup.bmp' , 0
+    BMP_guide          db 'guide.bmp' , 0
     BMP_tools_bg       db 'toolsbg.bmp' , 0
     BMP_robot          db 'robot.bmp' , 0
     BMP_mario          db 'mario.bmp' , 0
     BMP_grenade        db 'grnd.bmp' , 0
     BMP_black_hole     db 'bh.bmp' , 0
     BMP_alien          db 'alien.bmp' , 0
+    BMP_sky            db 'sky.bmp' , 0
 
     BMP_handle     dw ?
     BMP_header     db 54 dup(0)
@@ -103,6 +118,24 @@ DATASEG
     BMP_skip_color     db 0
     BMP_should_skip    db 0
 
+    BMP_dragging       db 0
+    BMP_dragging_x     dw 0
+    BMP_dragging_y     dw 0
+    BMP_dragging_ptr   dw 0
+
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+    GRENADE_is_placed    db 0
+    GRENADE_did_explode  db 0
+    GRENADE_is_counting  db 0
+    GRENADE_x            dw 0
+    GRENADE_y            dw 0
+
+    BLACK_HOLE_is_placed db 0
+    BLACK_HOLE_is_alive  db 0
+    BLACK_HOLE_x         dw 0
+    BLACK_HOLE_y         dw 0
+
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     ERROR_opening_bmp_file   db 'Error when opening BMP file.', 0dh, 0ah, '$'
@@ -112,73 +145,25 @@ DATASEG
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    INFO_alien_struct_size equ 5
-    INFO_max_aliens        equ 5
+    ; INFO_alien_struct_size equ 5
+    ; INFO_max_aliens        equ 5
 
-    OBJECT_alien equ is_alive
-        is_alive db 1
-        alien_x  dw 0
-        alien_y  dw 0
+    ; OBJECT_alien equ is_alive
+    ;     is_alive db 1
+    ;     alien_x  dw 0
+    ;     alien_y  dw 0
 
-    TMP_current_alien equ tmp_is_alive
-        tmp_is_alive  db 1
-        tmp_alien_x   dw 0
-        tmp_alien_y   dw 0
+    ; TMP_current_alien equ tmp_is_alive
+    ;     tmp_is_alive  db 1
+    ;     tmp_alien_x   dw 0
+    ;     tmp_alien_y   dw 0
 
-    PROP_alien_is_alive equ 0
-    PROP_alien_x        equ 1
-    PROP_alien_y        equ 3
+    ; PROP_alien_is_alive equ 0
+    ; PROP_alien_x        equ 1
+    ; PROP_alien_y        equ 3
 
-    DATA_alien_list       db INFO_alien_struct_size * INFO_max_aliens dup(?)
-    POINTER_current_alien db 0
-
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-    alien db 21 dup(BG) ; 21x26
-          db 9  dup(BG), 3 dup(BLACK), 9  dup(BG)
-          db 7  dup(BG), 2 dup(BLACK), 2  dup(L_GREEN), 1 dup(GREEN)  , 2 dup(BLACK)  , 7 dup(BG)
-          db 6  dup(BG), 1 dup(BLACK), 5  dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 6 dup(BG)
-          db 5  dup(BG), 1 dup(BLACK), 7  dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 5 dup(BG)
-          db 4  dup(BG), 1 dup(BLACK), 9  dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 4 dup(BG)
-          db 3  dup(BG), 1 dup(BLACK), 11 dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 3 dup(BG)
-          db 3  dup(BG), 1 dup(BLACK), 12 dup(L_GREEN), 1 dup(GREEN)  , 1 dup(BLACK)  , 3 dup(BG)
-          db 2  dup(BG), 1 dup(BLACK), 1  dup(L_GREEN), 4 dup(BLACK)  , 5 dup(L_GREEN), 4 dup(BLACK)  , 1 dup(GREEN)  , 1 dup(BLACK)  , 2 dup(BG)
-          db 2  dup(BG), 1 dup(BLACK), 1  dup(L_GREEN), 1 dup(BLACK)  , 3 dup(WHITE)  , 1 dup(BLACK)  , 3 dup(L_GREEN), 1 dup(BLACK)  , 3 dup(WHITE), 1 dup(BLACK), 1 dup(GREEN), 1 dup(BLACK), 2 dup(BG)
-          db 2  dup(BG), 1 dup(BLACK), 1  dup(L_GREEN), 2 dup(BLACK)  , 2 dup(WHITE)  , 2 dup(BLACK)  , 1 dup(L_GREEN), 2 dup(BLACK)  , 2 dup(WHITE), 2 dup(BLACK), 1 dup(GREEN), 1 dup(BLACK), 2 dup(BG)
-          db 2  dup(BG), 1 dup(BLACK), 1  dup(L_GREEN), 3 dup(BLACK)  , 1 dup(WHITE)  , 2 dup(BLACK)  , 1 dup(L_GREEN), 2 dup(BLACK)  , 1 dup(WHITE), 3 dup(BLACK), 1 dup(GREEN), 1 dup(BLACK), 2 dup(BG)
-          db 3  dup(BG), 1 dup(BLACK), 1  dup(L_GREEN), 5 dup(BLACK)  , 1 dup(L_GREEN), 5 dup(BLACK)  , 1 dup(GREEN)  , 1 dup(BLACK)  , 3 dup(BG)
-          db 3  dup(BG), 1 dup(BLACK), 2  dup(L_GREEN), 4 dup(BLACK)  , 1 dup(L_GREEN), 4 dup(BLACK)  , 2 dup(GREEN)  , 1 dup(BLACK)  , 3 dup(BG)
-          db 4  dup(BG), 1 dup(BLACK), 10 dup(L_GREEN), 1 dup(GREEN)  , 1 dup(BLACK)  , 4 dup(BG)
-          db 4  dup(BG), 1 dup(BLACK), 3  dup(L_GREEN), 1 dup(BLACK)  , 5 dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 4 dup(BG)
-          db 5  dup(BG), 1 dup(BLACK), 2  dup(L_GREEN), 4 dup(BLACK)  , 1 dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 5 dup(BG)
-          db 6  dup(BG), 1 dup(BLACK), 5  dup(L_GREEN), 2 dup(L_GREEN), 1 dup(BLACK)  , 6 dup(BG)
-          db 4  dup(BG), 2 dup(BLACK), 1  dup(L_GREEN), 2 dup(BLACK)  , 2 dup(L_GREEN), 1 dup(GREEN)  , 2 dup(BLACK)  , 1 dup(GREEN)  , 2 dup(BLACK), 4 dup(BG)
-          db 2  dup(BG), 2 dup(BLACK), 3  dup(L_GREEN), 2 dup(GREEN)  , 3 dup(BLACK)  , 5 dup(GREEN)  , 2 dup(BLACK)  , 2 dup(BG)
-          db 1  dup(BG), 1 dup(BLACK), 8  dup(L_GREEN), 3 dup(GREEN)  , 4 dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 1 dup(BG)
-          db 1  dup(BG), 1 dup(BLACK), 1  dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK)  , 9 dup(L_GREEN), 1 dup(BLACK)  , 2 dup(L_GREEN), 1 dup(GREEN), 1 dup(BLACK), 1 dup(BG)
-          db 1  dup(BG), 4 dup(BLACK), 1  dup(BG)     , 1 dup(BLACK)  , 1 dup(GREEN)  , 6 dup(L_GREEN), 1 dup(BLACK)  , 1 dup(BG)     , 4 dup(BLACK), 1 dup(BG)
-          db 6  dup(BG), 1 dup(BLACK), 1  dup(GREEN)  , 5 dup(L_GREEN), 1 dup(GREEN)  , 1 dup(BLACK), 6 dup(BG)
-          db 5  dup(BG), 1 dup(BLACK), 7  dup(L_GREEN), 2 dup(GREEN)  , 1 dup(BLACK), 5 dup(BG)
-          db 21 dup(BG)
-
-    mario db 14 dup(BG) ; 14x18
-          db 4  dup(BG), 5 dup(RED)  , 5 dup(BG)
-          db 3  dup(BG), 9 dup(RED)  , 2 dup(BG)
-          db 3  dup(BG), 3 dup(BROWN), 2 dup(BEIGE), 1 dup(BLACK), 1 dup(BEIGE) , 4 dup(BG)
-          db 2  dup(BG), 1 dup(BROWN), 1 dup(BEIGE), 1 dup(BROWN), 3 dup(BEIGE) , 1 dup(BLACK), 3 dup(BEIGE) , 2 dup(BG)
-          db 2  dup(BG), 1 dup(BROWN), 1 dup(BEIGE), 2 dup(BROWN), 3 dup(BEIGE) , 1 dup(BLACK), 3 dup(BEIGE) , 1 dup(BG)
-          db 3  dup(BG), 1 dup(BROWN), 4 dup(BEIGE), 4 dup(BLACK), 2 dup(BG)
-          db 4  dup(BG), 6 dup(BEIGE), 4 dup(BG)
-          db 3  dup(BG), 2 dup(RED)  , 1 dup(BLUE) , 2 dup(RED)  , 1 dup(BLUE)  , 2 dup(RED)  , 3 dup(BG)
-          db 2  dup(BG), 3 dup(RED)  , 1 dup(BLUE) , 2 dup(RED)  , 1 dup(BLUE)  , 3 dup(RED)  , 2 dup(BG)
-          db 1  dup(BG), 4 dup(RED)  , 4 dup(BLUE) , 4 dup(RED)  , 1 dup(BG)
-          db 1  dup(BG), 2 dup(BEIGE), 1 dup(RED)  , 1 dup(BLUE) , 1 dup(YELLOW), 2 dup(BLUE) , 1 dup(YELLOW), 1 dup(BLUE), 1 dup(RED), 2 dup(BEIGE), 1 dup(BG)
-          db 1  dup(BG), 3 dup(BEIGE), 6 dup(BLUE) , 3 dup(BEIGE), 1 dup(BG)
-          db 1  dup(BG), 2 dup(BEIGE), 8 dup(BLUE) , 2 dup(BEIGE), 1 dup(BG)
-          db 3  dup(BG), 3 dup(BLUE) , 2 dup(BG)   , 3 dup(BLUE) , 3 dup(BG)
-          db 2  dup(BG), 3 dup(BROWN), 4 dup(BG)   , 3 dup(BROWN), 2 dup(BG)
-          db 1  dup(BG), 4 dup(BROWN), 4 dup(BG)   , 4 dup(BROWN), 1 dup(BG)
-          db 14 dup(BG)
+    ; DATA_alien_list       db INFO_alien_struct_size * INFO_max_aliens dup(?)
+    ; POINTER_current_alien db 0
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -197,8 +182,7 @@ start:
     int 10h
 
     call SavePalette
-
-    call ShowCursor
+    call HideCursor
 
     push offset BMP_starting
     push 0
@@ -232,6 +216,9 @@ skip_err:
     mov dx, offset OnCursorEvent
     mov cx, 1111b
     int 33h
+
+    mov [GAME_state], 0
+    call ShowCursor
 
     l:
         call OnGameTick
@@ -500,7 +487,7 @@ endp
 ;  none
 ;
 ; Description:
-;  listener to mouse events, does hover effects
+;  listener to all mouse events, does hover effects
 ;
 ; Register usage:
 ;  none
@@ -514,8 +501,21 @@ proc OnCursorEvent far
     shr cx, 1
 
     mov bl, [GAME_state]
-    cmp bl, 0
-    je @@main_menu
+    cmp bl, 0 ; main menu
+    jne @@check_game
+    jmp @@main_menu
+
+@@check_game:
+    cmp bl, 10 ; game
+    jne @@check_starting
+    jmp @@game
+
+@@check_starting:
+    cmp bl, 30 ; starting
+    jne @@check_next
+    jmp @@starting
+
+@@check_next:
     jmp @@ret
 
 @@main_menu:
@@ -561,8 +561,8 @@ proc OnCursorEvent far
     push offset BMP_menu_guide
     cmp ax, 10b
     jne @@cont
-    ;call ViewGuide
-    jmp @@cont ; remove when ViewGuide is implemented
+    call ViewGuide
+    jmp @@cont
 
 @@not_guide:
     push offset BMP_menu
@@ -574,7 +574,117 @@ proc OnCursorEvent far
         push 200
         call RenderBmp
 
+        jmp @@ret
+
 @@skip_main_menu:
+
+    @@game:
+        cmp ax, 10b ; left press
+        jne @@not_left_press
+            ; check if hovering on any tool
+
+            ; grenade
+            cmp cx, 20
+            jna @@not_grenade
+
+            cmp cx, 45
+            jnb @@not_grenade
+
+            cmp dx, 25
+            jna @@not_grenade
+
+            cmp dx, 50
+            jnb @@not_grenade
+
+            ; yes
+            cmp [GRENADE_is_placed], 1
+            je @@not_grenade
+
+            mov [BMP_dragging], 1
+            mov [BMP_dragging_x], cx
+            mov [BMP_dragging_y], dx
+            mov [BMP_dragging_ptr], offset BMP_grenade
+
+            @@not_grenade:
+            ; black hole
+            cmp cx, 60
+            jna @@not_black_hole
+
+            cmp cx, 85
+            jnb @@not_black_hole
+
+            cmp dx, 25
+            jna @@not_black_hole
+
+            cmp dx, 50
+            jnb @@not_black_hole
+
+            ; yes
+            cmp [BLACK_HOLE_is_placed], 1
+            je @@not_black_hole
+
+            mov [BMP_dragging], 1
+            mov [BMP_dragging_x], cx
+            mov [BMP_dragging_y], dx
+            mov [BMP_dragging_ptr], offset BMP_black_hole
+
+            @@not_black_hole:
+
+        jmp @@ret
+
+        @@not_left_press:
+        cmp ax, 100b ; left release
+        jne @@not_left_release
+        cmp [BMP_dragging], 1
+        jne @@not_left_release
+            mov [BMP_dragging], 0
+            
+            cmp [BMP_dragging_ptr], offset BMP_grenade
+            jne @@check_black_hole_release
+            mov [GRENADE_is_placed], 1
+            mov [GRENADE_x], cx
+            mov [GRENADE_y], dx
+
+            @@check_black_hole_release:
+            cmp [BMP_dragging_ptr], offset BMP_black_hole
+            jne @@ret
+            mov [BLACK_HOLE_is_placed], 1
+            mov [BLACK_HOLE_x], cx
+            mov [BLACK_HOLE_y], dx
+
+            call DrawTools
+
+        jmp @@ret
+
+        @@not_left_release:
+        cmp ax, 1b ; pos change
+        jne @@not_pos_change
+            cmp [BMP_dragging], 0
+            je @@ret
+                mov ax, [BMP_dragging_x]
+                sub ax, 5
+                push ax
+                mov ax, [BMP_dragging_y]
+                sub ax, 5
+                push ax
+                push OBJ_w + 10
+                push OBJ_h + 10
+                call UndrawRect
+                call DrawTools
+                call DrawBackground
+                call DrawAllSprites
+                call DrawDraggedBmp
+
+                mov [BMP_dragging_x], cx
+                mov [BMP_dragging_y], dx
+
+        jmp @@ret
+
+        @@not_pos_change:
+        jmp @@ret
+
+    @@starting:
+    jmp @@ret
 
     @@ret:
         call ShowCursor
@@ -685,7 +795,7 @@ endp
 ;  none
 ;
 ; Description:
-;  draws white background
+;  draws black background
 ;
 ; Register usage:
 ;  none
@@ -696,11 +806,17 @@ proc DrawBackground
     push cx
     push dx
 
+    ; push 0
+    ; push GAME_t + 1
+    ; push GAME_w * (GAME_h - GAME_t - 1)
+    ; push BG
+    ; call DrawHorizontalLine
+    push offset BMP_sky
     push 0
-    push 0
-    push GAME_w * (GAME_h + 1)
-    push BG
-    call DrawHorizontalLine
+    push GAME_t
+    push GAME_w
+    push GAME_h - GAME_t
+    call RenderBmp
 
     @@ret:
         pop dx
@@ -878,6 +994,170 @@ proc ExitGame
 endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: DrawDraggedBmp
+;
+; Arguments:
+;  none
+;
+; Returns:
+;  none
+;
+; Description:
+;  draws dragged bmp on screen
+;
+; Register usage:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+proc DrawDraggedBmp
+    mov [BMP_should_skip], 1
+    mov [BMP_skip_color], OBJ_bg
+
+    call HideCursor
+
+    push [BMP_dragging_ptr]
+    push [BMP_dragging_x]
+    push [BMP_dragging_y]
+    push OBJ_w
+    push OBJ_h
+    call RenderBmp
+
+    call ShowCursor
+
+    @@ret:
+
+        ret
+
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: DrawGrenadeInTools
+;
+; Arguments:
+;  none
+;
+; Returns:
+;  none
+;
+; Description:
+;  draws the grenade in the tools section
+;
+; Register usage:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+proc DrawGrenadeInTools
+    mov [BMP_should_skip], 1
+    mov [BMP_skip_color], OBJ_bg
+
+    push offset BMP_grenade
+    push 20
+    push 25
+    push OBJ_w
+    push OBJ_h
+    call RenderBmp
+
+    @@ret:
+
+        ret
+
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: DrawBlackHoleInTools
+;
+; Arguments:
+;  none
+;
+; Returns:
+;  none
+;
+; Description:
+;  draws the black hole in the tools section
+;
+; Register usage:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+proc DrawBlackHoleInTools
+    mov [BMP_should_skip], 1
+    mov [BMP_skip_color], OBJ_bg
+
+    push offset BMP_black_hole
+    push 60
+    push 25
+    push OBJ_w
+    push OBJ_h
+    call RenderBmp
+
+    @@ret:
+
+        ret
+
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: DrawTools
+;
+; Arguments:
+;  none
+;
+; Returns:
+;  none
+;
+; Description:
+;  draws tools on screen
+;
+; Register usage:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+proc DrawTools
+    mov [BMP_should_skip], 0
+
+    push offset BMP_tools_bg
+    push 0
+    push 0
+    push 320
+    push 70
+    call RenderBmp
+
+    mov [BMP_should_skip], 1
+    mov [BMP_skip_color], OBJ_bg
+
+    cmp [BMP_dragging], 1
+    jne @@not_dragging
+
+    cmp [BMP_dragging_ptr], offset BMP_grenade
+    je @@skip_grenade_drag
+    cmp [GRENADE_is_placed], 1
+    je @@skip_grenade_drag
+    call DrawGrenadeInTools
+    @@skip_grenade_drag:
+    cmp [BMP_dragging_ptr], offset BMP_black_hole
+    je @@skip_black_hole_drag
+    cmp [BLACK_HOLE_is_placed], 1
+    je @@skip_black_hole_drag
+    call DrawBlackHoleInTools
+    @@skip_black_hole_drag:
+    jmp @@ret
+
+    @@not_dragging:
+        cmp [GRENADE_is_placed], 1
+        je @@skip_grenade_placed
+        call DrawGrenadeInTools
+
+    @@skip_grenade_placed:
+        cmp [BLACK_HOLE_is_placed], 1
+        je @@skip_black_hole_placed
+        call DrawBlackHoleInTools
+
+    @@skip_black_hole_placed:
+        jmp @@ret
+
+    @@ret:
+
+        ret
+
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Procedure: SetupGame
 ;
 ; Arguments:
@@ -894,15 +1174,41 @@ endp
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 proc SetupGame
     mov [GAME_state], 10
-    call RestorePalette
     call DrawBackground
+    call RestorePalette
 
-    ; push offset BMP_tools_bg
-    ; push 0
-    ; push 0
-    ; push 320
-    ; push 50
-    ; call RenderBmp
+    call DrawTools
+
+    @@ret:
+
+        ret
+
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: ViewGuide
+;
+; Arguments:
+;  none
+;
+; Returns:
+;  none
+;
+; Description:
+;  views the guide image
+;
+; Register usage:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+proc ViewGuide
+    mov [GAME_state], 1
+
+    push offset BMP_guide
+    push 0
+    push 0
+    push 320
+    push 200
+    call RenderBmp
 
     @@ret:
 
@@ -936,6 +1242,10 @@ proc OnGameTick
     cmp al, bl
     je @@main_menu
 
+    mov bl, 1
+    cmp al, bl
+    je @@guide
+
     mov bl, 10
     cmp al, bl
     je @@game_tick
@@ -948,6 +1258,11 @@ proc OnGameTick
 
     mov [FLAG_should_setup_game], 0
     call SetupGame
+    jmp @@s_skip_setup_game
+
+@@guide:
+    call ViewGuide
+    jmp @@s_skip_setup_game
 
 @@s_skip_setup_game:
     jmp @@skip_move
@@ -958,6 +1273,61 @@ proc OnGameTick
     mov ax, GAME_mpt
     cmp [GAME_ticks], ax
     jnae @@jmp_to_skip_move
+
+    ; move alien towards mario by:
+    ; 1. comparing distance of X to the distance in Y
+    ; 2. moving in the direction of the greater distance
+    ; 3. if the distance is equal, move in the direction of the last move
+
+    mov ax, [ALIEN_x]
+    sub ax, [MARIO_x]
+    mov cx, ax
+    mov bx, [ALIEN_y]
+    sub bx, [MARIO_y]
+    mov dx, bx
+
+    cmp ax, 0
+    jg @@skip_neg_x
+    neg ax
+    @@skip_neg_x:
+    cmp bx, 0
+    jg @@skip_neg_y
+    neg bx
+    jmp @@skip_neg_y
+
+    @@jmp_to_skip_move:
+        jmp @@skip_move
+
+    @@skip_neg_y:
+
+    cmp ax, bx
+    jg @@move_alien_x
+    ; move alien y
+    ; check which direction to move
+    cmp dx, 0
+    jl @@move_alien_y_down
+    ; move up
+    mov [ALIEN_dir], 1  ; up
+    jmp @@skip_alien_move
+
+    @@move_alien_y_down:
+    mov [ALIEN_dir], 3  ; down
+    jmp @@skip_alien_move
+
+    @@move_alien_x:
+    ; move alien x
+    ; check which direction to move
+    cmp cx, 0
+    jg @@move_alien_x_left
+    ; move right
+    mov [ALIEN_dir], 4  ; right
+    jmp @@skip_alien_move
+
+    @@move_alien_x_left:
+    mov [ALIEN_dir], 2  ; left
+    jmp @@skip_alien_move
+
+    @@skip_alien_move:
 
     mov [GAME_ticks], 0
 
@@ -971,119 +1341,216 @@ proc OnGameTick
     je @@down
 
     cmp [MARIO_dir], 4
-    je @@right
+    jne @@jmp_to_cont
 
-    jmp @@cont
+    jmp @@right
 
     @@up:
         mov ax, [MARIO_y]
+        sub ax, [MARIO_speed]
         cmp ax, GAME_t
         jng @@cont
 
-        dec [MARIO_y]
+        mov ax, [MARIO_speed]
+        sub [MARIO_y], ax
         jmp @@cont
 
     @@left:
         mov ax, [MARIO_x]
+        sub ax, [MARIO_speed]
         cmp ax, 0
         jng @@cont
 
-        dec [MARIO_x]
+        mov ax, [MARIO_speed]
+        sub [MARIO_x], ax
         jmp @@cont
 
-    @@jmp_to_skip_move:
-        jmp @@skip_move
+    @@jmp_to_cont:
+        jmp @@cont
 
     @@down:
         mov ax, [MARIO_y]
         add ax, MARIO_h
+        add ax, [MARIO_speed]
         cmp ax, GAME_h
         jnl @@cont
 
-        inc [MARIO_y]
+        mov ax, [MARIO_speed]
+        add [MARIO_y], ax
         jmp @@cont
 
     @@right:
         mov ax, [MARIO_x]
         add ax, MARIO_w
+        add ax, [MARIO_speed]
         cmp ax, GAME_w
         jnl @@cont
 
-        inc [MARIO_x]
+        mov ax, [MARIO_speed]
+        add [MARIO_x], ax
         jmp @@cont
 
 @@cont:
-    push [MARIO_x]
-    push [MARIO_y]
-    call DrawMarioAt
+    cmp [ALIEN_dir], 1
+    je @@up_alien
+
+    cmp [ALIEN_dir], 2
+    je @@left_alien
+
+    cmp [ALIEN_dir], 3
+    je @@down_alien
+
+    cmp [ALIEN_dir], 4
+    jne @@jmp_to_cont_2
+
+    jmp @@right_alien
+
+    @@up_alien:
+        mov ax, [ALIEN_y]
+        sub ax, [ALIEN_speed]
+        cmp ax, GAME_t
+        jng @@cont_2
+
+        mov ax, [ALIEN_speed]
+        sub [ALIEN_y], ax
+        jmp @@cont_2
+
+    @@left_alien:
+        mov ax, [ALIEN_x]
+        sub ax, [ALIEN_speed]
+        cmp ax, 0
+        jng @@cont_2
+
+        mov ax, [ALIEN_speed]
+        sub [ALIEN_x], ax
+        jmp @@cont_2
+
+    @@jmp_to_cont_2:
+        jmp @@cont_2
+
+    @@down_alien:
+        mov ax, [ALIEN_y]
+        add ax, ALIEN_h
+        add ax, [ALIEN_speed]
+        cmp ax, GAME_h
+        jnl @@cont_2
+
+        mov ax, [ALIEN_speed]
+        add [ALIEN_y], ax
+        jmp @@cont_2
+
+    @@right_alien:
+        mov ax, [ALIEN_x]
+        add ax, ALIEN_w
+        add ax, [ALIEN_speed]
+        cmp ax, GAME_w
+        jnl @@cont_2
+
+        mov ax, [ALIEN_speed]
+        add [ALIEN_x], ax
+        jmp @@cont_2
+
+@@cont_2:
+    cmp [ROBOT_dir], 2
+    je @@left_robot
+
+    cmp [ROBOT_dir], 4
+    jne @@jmp_to_cont_3
+
+    jmp @@right_robot
+
+    @@left_robot:
+        mov ax, [ROBOT_x]
+        sub ax, [ROBOT_speed]
+        cmp ax, 0
+        jng @@swap_dir_left
+
+        mov ax, [ROBOT_speed]
+        sub [ROBOT_x], ax
+        jmp @@cont_3
+
+    @@swap_dir_left:
+        mov ax, [ROBOT_y]
+        add ax, [ROBOT_speed]
+        add ax, ROBOT_h
+        cmp ax, GAME_h
+        jnl @@reset_robot_pos
+
+        mov [ROBOT_dir], 4
+        mov ax, [ROBOT_speed]
+        add [ROBOT_y], ax
+        jmp @@cont_3
+
+    @@jmp_to_cont_3:
+        jmp @@cont_3
+
+    @@right_robot:
+        mov ax, [ROBOT_x]
+        add ax, ROBOT_w
+        add ax, [ROBOT_speed]
+        cmp ax, GAME_w
+        jnl @@swap_dir_right
+
+        mov ax, [ROBOT_speed]
+        add [ROBOT_x], ax
+        jmp @@cont_3
+
+    @@swap_dir_right:
+        mov ax, [ROBOT_y]
+        add ax, [ROBOT_speed]
+        add ax, ROBOT_h
+        cmp ax, GAME_h
+        jnl @@reset_robot_pos
+
+        mov [ROBOT_dir], 2
+        mov ax, [ROBOT_speed]
+        add [ROBOT_y], ax
+        jmp @@cont_3
+
+    @@reset_robot_pos:
+        mov ax, [ROBOT_i_x]
+        mov [ROBOT_x], ax
+        mov ax, [ROBOT_i_y]
+        mov [ROBOT_y], ax
+        mov [ROBOT_dir], 2
+
+@@cont_3:
+    call DrawBackground
+    call DrawTools
+    call DrawAllSprites
 
 @@skip_move:
     call HandlePlayerInput
     cmp dl, 1
     jne @@skip_exit_game
-    call ExitGame
+    cmp [GAME_state], 0
+    je @@exit_game
+    mov [BMP_should_skip], 0
+    mov [GAME_state], 0
+    jmp @@ret
+
+    @@exit_game:
+        call ExitGame
 
     @@skip_exit_game:
-    ; check for collision of mario and rect
-    ; conditions for collision are:
-    ;  rect x is less than or equal to mario x + mario w AND
-    ;  rect x is higher than or equal to mario x AND
-    ;  rect y is less than or equal to mario y + mario h AND
-    ;  rect y is higher than or equal to mario y
-    ; OR: SAME CHECKS FOR SWAPPED OBJECTS
-    @@check_mario_pov:
-        ; 1
-        mov ax, [MARIO_x]
-        add ax, MARIO_w
-        cmp [CHASE_random_x], ax
-        jnle @@check_rect_pov
 
-        ; 2
-        mov ax, [MARIO_x]
-        cmp [CHASE_random_x], ax
-        jnae @@check_rect_pov
+    ; collision checks
+    push [MARIO_x]
+    push [MARIO_y]
+    push MARIO_w
+    push MARIO_h
+    push [ALIEN_x]
+    push [ALIEN_y]
+    push ALIEN_w
+    push ALIEN_h
+    call IsCollision
+    cmp dl, 1
+    je @@col_mario_alien
+    jmp @@ret
 
-        ; 3
-        mov ax, [MARIO_y]
-        add ax, MARIO_h
-        cmp [CHASE_random_y], ax
-        jnle @@check_rect_pov
-
-        ; 4
-        mov ax, [MARIO_y]
-        cmp [CHASE_random_y], ax
-        jnae @@check_rect_pov
-
-        ; COLLISION
-        inc [CHASE_points]
-
-    @@check_rect_pov:
-        ; 1
-        mov ax, [CHASE_random_x]
-        add ax, CHASE_w
-        cmp [MARIO_x], ax
-        jnle @@no_collision
-
-        ; 2
-        mov ax, [CHASE_random_x]
-        cmp [MARIO_x], ax
-        jnae @@no_collision
-
-        ; 3
-        mov ax, [CHASE_random_y]
-        add ax, CHASE_h
-        cmp [MARIO_y], ax
-        jnle @@no_collision
-
-        ; 4
-        mov ax, [CHASE_random_y]
-        cmp [MARIO_y], ax
-        jnae @@no_collision
-
-        ; COLLISION
-        inc [CHASE_points]
-
-    @@no_collision:
+    @@col_mario_alien:
+        mov [BMP_should_skip], 0
+        mov [GAME_state], 0
 
     @@ret:
         pop dx
@@ -1093,6 +1560,65 @@ proc OnGameTick
 
         ret
 
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: DrawAllSprites
+;
+; Arguments:
+;  none
+;
+; Returns:
+;  none
+;
+; Description:
+;  draws all sprites
+;
+; Register usage:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+proc DrawAllSprites
+    push [MARIO_x]
+    push [MARIO_y]
+    call DrawMarioAt
+
+    push [ALIEN_x]
+    push [ALIEN_y]
+    call DrawAlienAt
+
+    push [ROBOT_x]
+    push [ROBOT_y]
+    call DrawRobotAt
+
+    cmp [GRENADE_is_placed], 1
+    jne @@skip_grenade
+    cmp [GRENADE_did_explode], 1
+    je @@skip_grenade
+    push offset BMP_grenade
+    push [GRENADE_x]
+    push [GRENADE_y]
+    push 25
+    push 25
+    call RenderBmp
+
+    @@skip_grenade:
+
+    cmp [BLACK_HOLE_is_placed], 1
+    jne @@skip_black_hole
+    cmp [BLACK_HOLE_is_alive], 1
+    je @@skip_black_hole
+    push offset BMP_black_hole
+    push [BLACK_HOLE_x]
+    push [BLACK_HOLE_y]
+    push 25
+    push 25
+    call RenderBmp
+
+    @@skip_black_hole:
+
+    @@ret:
+
+        ret
 endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1116,6 +1642,7 @@ endp
 proc HandlePlayerInput
     push ax
 
+    xor dl, dl
     ; check if key in buffer
     mov ah, 1
     int 16h
@@ -1225,23 +1752,29 @@ proc Sleep
 endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawAlienAt
+; Procedure: IsCollision
 ;
 ; Arguments:
-;  stack - (x, y)
+;  stack - (x1, y1, w1, h1, x2, y2, w2, h2)
 ;
 ; Returns:
-;  none
+;  dl - 1 if collision, 0 if no collision
 ;
 ; Description:
-;  draws an alien at given position
+;  draws mario at given position
 ;
 ; Registers:
 ;  none
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-x equ [word bp + 6]
-y equ [word bp + 4]
-proc DrawAlienAt
+x1 equ [word bp + 18]
+y1 equ [word bp + 16]
+w1 equ [word bp + 14]
+h1 equ [word bp + 12]
+x2 equ [word bp + 10]
+y2 equ [word bp + 8]
+w2 equ [word bp + 6]
+h2 equ [word bp + 4]
+proc IsCollision
     push bp
     mov bp, sp
 
@@ -1250,25 +1783,46 @@ proc DrawAlienAt
     push cx
     push dx
 
-    ; mov [BMP_skip_color], ALIEN_bg
-    ; mov [BMP_should_skip], 1
-    ; push offset BMP_alien
-    push x
-    push y
-    push ALIEN_w
-    push ALIEN_h
-    push offset alien
-    call DrawMatrixAt
-    ; call RenderBmp
+    ; check for collision on X axis
+    mov ax, x2
+    add ax, w2
+    cmp x1, ax ; is x1 to the right of 2's right edge?
+    ja @@no_collision  ; if yes, then no collision
 
-@@ret:
-    pop dx
-    pop cx
-    pop bx
-    pop ax
+    mov ax, x1
+    add ax, w1
+    cmp x2, ax ; is x2 to the right of 1's right edge?
+    ja @@no_collision  ; if yes, then no collision
 
-    pop bp
-    ret 4
+    ; check for collision on Y axis
+    mov ax, y2
+    add ax, h2
+    cmp y1, ax ; is y1 below 2's bottom edge?
+    ja @@no_collision  ; if yes, then no collision
+
+    mov ax, y1
+    add ax, h1
+    cmp y2, ax ; is y2 above 1's top edge?
+    ja @@no_collision  ; if yes, then no collision
+
+    ; if none of the above conditions are true, then there's a collision
+    jmp @@collision
+
+    @@collision:
+        mov dl, 1
+        jmp @@ret
+
+    @@no_collision:
+        mov dl, 0
+
+    @@ret:
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+
+        pop bp
+        ret 16
 
 endp
 
@@ -1298,16 +1852,111 @@ proc DrawMarioAt
     push cx
     push dx
 
-    ; mov [BMP_skip_color], MARIO_bg
-    ; mov [BMP_should_skip], 1
-    ; push offset BMP_mario
+;  stack - (filename asciiz offset, x, y, w, h)
+    mov [BMP_skip_color], MARIO_bg
+    mov [BMP_should_skip], 1
+    push offset BMP_mario
     push x
     push y
     push MARIO_w
     push MARIO_h
-    push offset mario
-    call DrawMatrixAt
-    ; call RenderBmp
+    ; push offset mario
+    ; call DrawMatrixAt
+    call RenderBmp
+
+@@ret:
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+
+    pop bp
+    ret 4
+
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: DrawRobotAt
+;
+; Arguments:
+;  stack - (x, y)
+;
+; Returns:
+;  none
+;
+; Description:
+;  draws the robot at given position
+;
+; Registers:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+x equ [word bp + 6]
+y equ [word bp + 4]
+proc DrawRobotAt
+    push bp
+    mov bp, sp
+
+    push ax
+    push bx
+    push cx
+    push dx
+
+;  stack - (filename asciiz offset, x, y, w, h)
+    mov [BMP_skip_color], ROBOT_bg
+    mov [BMP_should_skip], 1
+    push offset BMP_robot
+    push x
+    push y
+    push ROBOT_w
+    push ROBOT_h
+    call RenderBmp
+
+@@ret:
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+
+    pop bp
+    ret 4
+
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: DrawAlienAt
+;
+; Arguments:
+;  stack - (x, y)
+;
+; Returns:
+;  none
+;
+; Description:
+;  draws the alien at given position
+;
+; Registers:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+x equ [word bp + 6]
+y equ [word bp + 4]
+proc DrawAlienAt
+    push bp
+    mov bp, sp
+
+    push ax
+    push bx
+    push cx
+    push dx
+
+;  stack - (filename asciiz offset, x, y, w, h)
+    mov [BMP_skip_color], ALIEN_bg
+    mov [BMP_should_skip], 1
+    push offset BMP_alien
+    push x
+    push y
+    push ALIEN_w
+    push ALIEN_h
+    call RenderBmp
 
 @@ret:
     pop dx
