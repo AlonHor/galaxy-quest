@@ -1,3 +1,4 @@
+JUMPS
 IDEAL
 MODEL small
 STACK 100h
@@ -19,28 +20,28 @@ BG       equ BLACK
 FLOOR_y  equ 200 / 2
 FLOOR_x  equ 320 / 2
 
-MARIO_w  equ 25
-MARIO_h  equ 25
+MARIO_w  equ 11
+MARIO_h  equ 15
 MARIO_bg equ 255 ; 255
 
-ALIEN_h  equ 25
-ALIEN_w  equ 25
+ALIEN_h  equ 15
+ALIEN_w  equ 15
 ALIEN_bg equ 255
 
-ROBOT_h  equ 25
-ROBOT_w  equ 25
+ROBOT_h  equ 15
+ROBOT_w  equ 15
 ROBOT_bg equ 255
 
 OBJ_bg   equ 255
-OBJ_w    equ 25
-OBJ_h    equ 25
+OBJ_w    equ 11
+OBJ_h    equ 11
 
 CYCLES   equ 50000
 
 CHASE_w  equ 5
 CHASE_h  equ 5
 
-GAME_t   equ 70
+GAME_t   equ 15
 GAME_w   equ 320
 GAME_h   equ 200
 GAME_mpt equ 30000
@@ -66,6 +67,14 @@ DATASEG
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+    ALIEN_is_alive db 1
+    ALIEN_death    dw 0
+    ROBOT_is_alive db 1
+    ROBOT_death    dw 0
+
+    MARIO_i_x   dw FLOOR_x - (MARIO_w / 2)
+    MARIO_i_y   dw FLOOR_y - (MARIO_h / 2)
+    MARIO_i_dir db 0
     MARIO_x     dw FLOOR_x - (MARIO_w / 2)
     MARIO_y     dw FLOOR_y - (MARIO_h / 2)
     MARIO_dir   db 0
@@ -73,13 +82,15 @@ DATASEG
 
     ALIEN_i_x   dw FLOOR_x + (ALIEN_w * 2)
     ALIEN_i_y   dw FLOOR_y + (ALIEN_h * 2)
+    ALIEN_i_dir db 0
     ALIEN_x     dw FLOOR_x + (ALIEN_w * 2)
     ALIEN_y     dw FLOOR_y + (ALIEN_h * 2)
     ALIEN_dir   db 0
-    ALIEN_speed dw 2
+    ALIEN_speed dw 3
 
     ROBOT_i_x   dw GAME_w - ROBOT_w
     ROBOT_i_y   dw GAME_t + 1
+    ROBOT_i_dir db 2
     ROBOT_x     dw GAME_w - ROBOT_w
     ROBOT_y     dw GAME_t + 1
     ROBOT_dir   db 2
@@ -99,7 +110,7 @@ DATASEG
     BMP_tools_bg       db 'toolsbg.bmp' , 0
     BMP_robot          db 'robot.bmp' , 0
     BMP_mario          db 'mario.bmp' , 0
-    BMP_grenade        db 'grnd.bmp' , 0
+    BMP_landmine        db 'grnd.bmp' , 0
     BMP_black_hole     db 'bh.bmp' , 0
     BMP_alien          db 'alien.bmp' , 0
     BMP_sky            db 'sky.bmp' , 0
@@ -125,11 +136,11 @@ DATASEG
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    GRENADE_is_placed    db 0
-    GRENADE_did_explode  db 0
-    GRENADE_is_counting  db 0
-    GRENADE_x            dw 0
-    GRENADE_y            dw 0
+    LANDMINE_is_placed    db 0
+    LANDMINE_did_explode  db 0
+    LANDMINE_is_counting  db 0
+    LANDMINE_x            dw 0
+    LANDMINE_y            dw 0
 
     BLACK_HOLE_is_placed db 0
     BLACK_HOLE_is_alive  db 0
@@ -583,40 +594,40 @@ proc OnCursorEvent far
         jne @@not_left_press
             ; check if hovering on any tool
 
-            ; grenade
-            cmp cx, 20
-            jna @@not_grenade
+            ; landmine
+            cmp cx, 2
+            jna @@not_landmine
 
-            cmp cx, 45
-            jnb @@not_grenade
+            cmp cx, 2 + OBJ_w
+            jnb @@not_landmine
 
-            cmp dx, 25
-            jna @@not_grenade
+            cmp dx, 2
+            jna @@not_landmine
 
-            cmp dx, 50
-            jnb @@not_grenade
+            cmp dx, 2 + OBJ_h
+            jnb @@not_landmine
 
             ; yes
-            cmp [GRENADE_is_placed], 1
-            je @@not_grenade
+            cmp [LANDMINE_is_placed], 1
+            je @@not_landmine
 
             mov [BMP_dragging], 1
             mov [BMP_dragging_x], cx
             mov [BMP_dragging_y], dx
-            mov [BMP_dragging_ptr], offset BMP_grenade
+            mov [BMP_dragging_ptr], offset BMP_landmine
 
-            @@not_grenade:
+            @@not_landmine:
             ; black hole
-            cmp cx, 60
+            cmp cx, 2 + OBJ_w + 2
             jna @@not_black_hole
 
-            cmp cx, 85
+            cmp cx, 2 + OBJ_w + 2 + OBJ_w
             jnb @@not_black_hole
 
-            cmp dx, 25
+            cmp dx, 2
             jna @@not_black_hole
 
-            cmp dx, 50
+            cmp dx, 2 + OBJ_h
             jnb @@not_black_hole
 
             ; yes
@@ -639,11 +650,11 @@ proc OnCursorEvent far
         jne @@not_left_release
             mov [BMP_dragging], 0
             
-            cmp [BMP_dragging_ptr], offset BMP_grenade
+            cmp [BMP_dragging_ptr], offset BMP_landmine
             jne @@check_black_hole_release
-            mov [GRENADE_is_placed], 1
-            mov [GRENADE_x], cx
-            mov [GRENADE_y], dx
+            mov [LANDMINE_is_placed], 1
+            mov [LANDMINE_x], cx
+            mov [LANDMINE_y], dx
 
             @@check_black_hole_release:
             cmp [BMP_dragging_ptr], offset BMP_black_hole
@@ -661,15 +672,6 @@ proc OnCursorEvent far
         jne @@not_pos_change
             cmp [BMP_dragging], 0
             je @@ret
-                mov ax, [BMP_dragging_x]
-                sub ax, 5
-                push ax
-                mov ax, [BMP_dragging_y]
-                sub ax, 5
-                push ax
-                push OBJ_w + 10
-                push OBJ_h + 10
-                call UndrawRect
                 call DrawTools
                 call DrawBackground
                 call DrawAllSprites
@@ -1030,7 +1032,7 @@ proc DrawDraggedBmp
 endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawGrenadeInTools
+; Procedure: DrawLandmineInTools
 ;
 ; Arguments:
 ;  none
@@ -1039,18 +1041,18 @@ endp
 ;  none
 ;
 ; Description:
-;  draws the grenade in the tools section
+;  draws the landmine in the tools section
 ;
 ; Register usage:
 ;  none
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-proc DrawGrenadeInTools
+proc DrawLandmineInTools
     mov [BMP_should_skip], 1
     mov [BMP_skip_color], OBJ_bg
 
-    push offset BMP_grenade
-    push 20
-    push 25
+    push offset BMP_landmine
+    push 2
+    push 2
     push OBJ_w
     push OBJ_h
     call RenderBmp
@@ -1081,8 +1083,8 @@ proc DrawBlackHoleInTools
     mov [BMP_skip_color], OBJ_bg
 
     push offset BMP_black_hole
-    push 60
-    push 25
+    push 2 + OBJ_w + 2
+    push 2
     push OBJ_w
     push OBJ_h
     call RenderBmp
@@ -1111,12 +1113,11 @@ endp
 proc DrawTools
     mov [BMP_should_skip], 0
 
-    push offset BMP_tools_bg
     push 0
     push 0
-    push 320
-    push 70
-    call RenderBmp
+    push 320 * 16
+    push 0
+    call DrawHorizontalLine
 
     mov [BMP_should_skip], 1
     mov [BMP_skip_color], OBJ_bg
@@ -1124,12 +1125,12 @@ proc DrawTools
     cmp [BMP_dragging], 1
     jne @@not_dragging
 
-    cmp [BMP_dragging_ptr], offset BMP_grenade
-    je @@skip_grenade_drag
-    cmp [GRENADE_is_placed], 1
-    je @@skip_grenade_drag
-    call DrawGrenadeInTools
-    @@skip_grenade_drag:
+    cmp [BMP_dragging_ptr], offset BMP_landmine
+    je @@skip_landmine_drag
+    cmp [LANDMINE_is_placed], 1
+    je @@skip_landmine_drag
+    call DrawLandmineInTools
+    @@skip_landmine_drag:
     cmp [BMP_dragging_ptr], offset BMP_black_hole
     je @@skip_black_hole_drag
     cmp [BLACK_HOLE_is_placed], 1
@@ -1139,11 +1140,11 @@ proc DrawTools
     jmp @@ret
 
     @@not_dragging:
-        cmp [GRENADE_is_placed], 1
-        je @@skip_grenade_placed
-        call DrawGrenadeInTools
+        cmp [LANDMINE_is_placed], 1
+        je @@skip_landmine_placed
+        call DrawLandmineInTools
 
-    @@skip_grenade_placed:
+    @@skip_landmine_placed:
         cmp [BLACK_HOLE_is_placed], 1
         je @@skip_black_hole_placed
         call DrawBlackHoleInTools
@@ -1176,6 +1177,46 @@ proc SetupGame
     mov [GAME_state], 10
     call DrawBackground
     call RestorePalette
+
+    mov ax, [MARIO_i_x]
+    mov [MARIO_x], ax
+    mov ax, [MARIO_i_y]
+    mov [MARIO_y], ax
+    mov al, [MARIO_i_dir]
+    mov [MARIO_dir], al
+
+    mov ax, [ALIEN_i_x]
+    mov [ALIEN_x], ax
+    mov ax, [ALIEN_i_y]
+    mov [ALIEN_y], ax
+    mov al, [ALIEN_i_dir]
+    mov [ALIEN_dir], al
+
+    mov ax, [ROBOT_i_x]
+    mov [ROBOT_x], ax
+    mov ax, [ROBOT_i_y]
+    mov [ROBOT_y], ax
+    mov al, [ROBOT_i_dir]
+    mov [ROBOT_dir], al
+
+    mov [BMP_skip_color], 0
+    mov [BMP_should_skip], 0
+
+    mov [BMP_dragging], 0
+    mov [BMP_dragging_x], 0
+    mov [BMP_dragging_y], 0
+    mov [BMP_dragging_ptr], 0
+
+    mov [LANDMINE_is_placed], 0
+    mov [LANDMINE_did_explode], 0
+    mov [LANDMINE_is_counting], 0
+    mov [LANDMINE_x], 0
+    mov [LANDMINE_y], 0
+
+    mov [BLACK_HOLE_is_placed], 0
+    mov [BLACK_HOLE_is_alive], 0
+    mov [BLACK_HOLE_x], 0
+    mov [BLACK_HOLE_y], 0
 
     call DrawTools
 
@@ -1521,7 +1562,7 @@ proc OnGameTick
 
 @@skip_move:
     call HandlePlayerInput
-    cmp dl, 1
+    cmp di, 1
     jne @@skip_exit_game
     cmp [GAME_state], 0
     je @@exit_game
@@ -1534,23 +1575,118 @@ proc OnGameTick
 
     @@skip_exit_game:
 
-    ; collision checks
+    cmp [LANDMINE_is_placed], 0
+    je @@skip_mario_landmine_collision
+
     push [MARIO_x]
     push [MARIO_y]
     push MARIO_w
     push MARIO_h
+    push [LANDMINE_x]
+    push [LANDMINE_y]
+    push OBJ_w
+    push OBJ_h
+    call IsCollision
+    cmp di, 1
+    je @@game_over
+
+    @@skip_mario_landmine_collision:
+
+    cmp [BLACK_HOLE_is_placed], 0
+    je @@skip_mario_black_hole_collision
+
+    push [MARIO_x]
+    push [MARIO_y]
+    push MARIO_w
+    push MARIO_h
+    mov ax, [BLACK_HOLE_x]
+    sub ax, 10
+    push ax
+    mov ax, [BLACK_HOLE_y]
+    sub ax, 10
+    push ax
+    push OBJ_w + 20
+    push OBJ_h + 20
+    call IsCollision
+    cmp di, 1
+    je @@game_over
+
+    @@skip_mario_black_hole_collision:
+
+    cmp [ALIEN_is_alive], 0
+    je @@skip_alien_collision
+
     push [ALIEN_x]
     push [ALIEN_y]
     push ALIEN_w
     push ALIEN_h
+    push [MARIO_x]
+    push [MARIO_y]
+    push MARIO_w
+    push MARIO_h
     call IsCollision
-    cmp dl, 1
-    je @@col_mario_alien
+    cmp di, 1
+    je @@game_over
+
+    cmp [LANDMINE_is_placed], 0
+    je @@skip_alien_landmine_collision
+
+    push [ALIEN_x]
+    push [ALIEN_y]
+    push ALIEN_w
+    push ALIEN_h
+    push [LANDMINE_x]
+    push [LANDMINE_y]
+    push OBJ_w
+    push OBJ_h
+    call IsCollision
+    cmp di, 1
+    je @@kill_alien
+
+    @@skip_alien_landmine_collision:
+
+    cmp [BLACK_HOLE_is_placed], 0
+    je @@skip_alien_black_hole_collision
+
+    push [ALIEN_x]
+    push [ALIEN_y]
+    push ALIEN_w
+    push ALIEN_h
+    mov ax, [BLACK_HOLE_x]
+    sub ax, 10
+    push ax
+    mov ax, [BLACK_HOLE_y]
+    sub ax, 10
+    push ax
+    push OBJ_w + 20
+    push OBJ_h + 20
+    call IsCollision
+    cmp di, 1
+    je @@kill_alien
+
+    @@skip_alien_black_hole_collision:
+
+    @@skip_alien_collision:
+
     jmp @@ret
 
-    @@col_mario_alien:
+    @@game_over:
         mov [BMP_should_skip], 0
         mov [GAME_state], 0
+        jmp @@ret
+
+    @@kill_alien:
+        mov [ALIEN_is_alive], 0
+        mov ax, 40h
+        mov es, ax
+
+        mov ax, [es:6Ch]
+        mov [ALIEN_death], ax
+
+    ; @@col_mario_robot:
+    ;     mov [BMP_should_skip], 0
+    ;     mov [GAME_state], 0
+    ;     jmp @@ret
 
     @@ret:
         pop dx
@@ -1590,18 +1726,18 @@ proc DrawAllSprites
     push [ROBOT_y]
     call DrawRobotAt
 
-    cmp [GRENADE_is_placed], 1
-    jne @@skip_grenade
-    cmp [GRENADE_did_explode], 1
-    je @@skip_grenade
-    push offset BMP_grenade
-    push [GRENADE_x]
-    push [GRENADE_y]
-    push 25
-    push 25
+    cmp [LANDMINE_is_placed], 1
+    jne @@skip_landmine
+    cmp [LANDMINE_did_explode], 1
+    je @@skip_landmine
+    push offset BMP_landmine
+    push [LANDMINE_x]
+    push [LANDMINE_y]
+    push OBJ_w
+    push OBJ_h
     call RenderBmp
 
-    @@skip_grenade:
+    @@skip_landmine:
 
     cmp [BLACK_HOLE_is_placed], 1
     jne @@skip_black_hole
@@ -1610,8 +1746,8 @@ proc DrawAllSprites
     push offset BMP_black_hole
     push [BLACK_HOLE_x]
     push [BLACK_HOLE_y]
-    push 25
-    push 25
+    push OBJ_w
+    push OBJ_h
     call RenderBmp
 
     @@skip_black_hole:
@@ -1628,7 +1764,7 @@ endp
 ;  none
 ;
 ; Returns:
-;  dl - 1 if exit, 0 if continue
+;  di - 1 if exit, 0 if continue
 ;
 ; Description:
 ;  handles player input
@@ -1642,7 +1778,7 @@ endp
 proc HandlePlayerInput
     push ax
 
-    xor dl, dl
+    xor di, di
     ; check if key in buffer
     mov ah, 1
     int 16h
@@ -1697,11 +1833,11 @@ proc HandlePlayerInput
         jmp @@cont
 
     @@cont:
-        xor dl, dl
+        xor di, di
         jmp @@ret
 
     @@exit_game:
-        mov dl, 1
+        mov di, 1
 
     @@ret:
         pop ax
@@ -1758,7 +1894,7 @@ endp
 ;  stack - (x1, y1, w1, h1, x2, y2, w2, h2)
 ;
 ; Returns:
-;  dl - 1 if collision, 0 if no collision
+;  di - 1 if collision, 0 if no collision
 ;
 ; Description:
 ;  draws mario at given position
@@ -1809,11 +1945,11 @@ proc IsCollision
     jmp @@collision
 
     @@collision:
-        mov dl, 1
+        mov di, 1
         jmp @@ret
 
     @@no_collision:
-        mov dl, 0
+        xor di, di
 
     @@ret:
         pop dx
