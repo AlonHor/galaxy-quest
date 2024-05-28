@@ -162,7 +162,7 @@ start:
     mov ax, @data
     mov ds, ax
 
-    mov ax, 0
+    xor ax, ax
     int 33h
 
     mov ax, 13h
@@ -598,7 +598,7 @@ proc OnCursorEvent far
         mov bh, 0
         mov ah, 2
 
-        ; set cursor position to 2, 2
+        ; set cursor position to 10, 7
         mov dl, 10
         mov dh, 7
         int 10h
@@ -1939,13 +1939,6 @@ proc DrawAllSprites
     push [MARIO_y]
     call DrawMarioAt
 
-    push offset BMP_star
-    push [STAR_x]
-    push [STAR_y]
-    push OBJ_w
-    push OBJ_h
-    call RenderBmp
-
     cmp [ALIEN_is_alive], 0
     je @@alien_dead
 
@@ -2058,6 +2051,13 @@ proc DrawAllSprites
     mov [BLACK_HOLE_is_inactive], 0
 
     @@skip_black_hole:
+
+    push offset BMP_star
+    push [STAR_x]
+    push [STAR_y]
+    push OBJ_w
+    push OBJ_h
+    call RenderBmp
 
     @@ret:
 
