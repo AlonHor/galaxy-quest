@@ -27,7 +27,7 @@ CYCLES   equ 50000
 GAME_t   equ 15
 GAME_w   equ 320
 GAME_h   equ 200
-GAME_mpt equ 2500
+GAME_mpt equ 1000
 MENU_mpt equ 1
 
 DATASEG
@@ -37,7 +37,7 @@ DATASEG
     GAME_palette       db 300h dup(?)
     GAME_state         db 30
     GAME_menu_is_hover db 0
-    GAME_score         dw 0
+    GAME_score       dw 0
     GAME_is_over       db 0
 
     ; ~~~ GAME STATES ~~~
@@ -66,16 +66,17 @@ DATASEG
     MARIO_i_dir db 0
     MARIO_x     dw FLOOR_x - (MARIO_w / 2)
     MARIO_y     dw FLOOR_y - (MARIO_h / 2)
-    MARIO_dir   db 0
-    MARIO_speed dw 5
+    MARIO_dir   db 4
+    MARIO_r_dir db 0
+    MARIO_speed dw 3
 
-    ALIEN_i_x   dw FLOOR_x + (ALIEN_w * 2)
-    ALIEN_i_y   dw FLOOR_y + (ALIEN_h * 2)
+    ALIEN_i_x   dw FLOOR_x - (ALIEN_w * 3)
+    ALIEN_i_y   dw FLOOR_y + (ALIEN_h * 3)
     ALIEN_i_dir db 0
     ALIEN_x     dw FLOOR_x + (ALIEN_w * 2)
     ALIEN_y     dw FLOOR_y + (ALIEN_h * 2)
     ALIEN_dir   db 0
-    ALIEN_speed dw 3
+    ALIEN_speed dw 2
 
     ROBOT_i_x   dw GAME_w - ROBOT_w
     ROBOT_i_y   dw GAME_t + 1
@@ -83,7 +84,7 @@ DATASEG
     ROBOT_x     dw GAME_w - ROBOT_w
     ROBOT_y     dw GAME_t + 1
     ROBOT_dir   db 2
-    ROBOT_speed dw 10
+    ROBOT_speed dw 5
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -102,7 +103,8 @@ DATASEG
     BMP_tools_bg     db 'toolsbg.bmp' , 0
     BMP_robot        db 'robot.bmp' , 0
     BMP_robot_d      db 'robotd.bmp' , 0
-    BMP_mario        db 'mario.bmp' , 0
+    BMP_mario_r      db 'marior.bmp' , 0
+    BMP_mario_l      db 'mariol.bmp' , 0
     BMP_landmine     db 'grnd.bmp' , 0
     BMP_landmine_d   db 'grndd.bmp' , 0
     BMP_black_hole   db 'bh.bmp' , 0
@@ -1148,6 +1150,7 @@ proc SetupGame
     mov [MARIO_y], ax
     mov al, [MARIO_i_dir]
     mov [MARIO_dir], al
+    mov [MARIO_r_dir], 0
 
     mov ax, [ALIEN_i_x]
     mov [ALIEN_x], ax
@@ -1940,7 +1943,7 @@ proc DrawAllSprites
     mov es, ax
     mov ax, [es:6Ch]
     sub ax, [LANDMINE_death]
-    cmp ax, 110
+    cmp ax, 200
     jl @@skip_landmine
     mov [LANDMINE_is_placed], 0
     mov [LANDMINE_did_explode], 0
@@ -1998,7 +2001,7 @@ endp
 ;  di - 1 if exit, 0 if continue
 ;
 ; Description:
-;  handles player input
+;  handles player input, arrow keys, esc, wasd...
 ;
 ; External links:
 ;  https://stanislavs.org/helppc/scan_codes.html
@@ -2033,16 +2036,32 @@ proc HandlePlayerInput
         cmp ah, 48h
         je @@up
 
+        ; w
+        cmp ah, 11h
+        je @@up
+
         ; left arrow
         cmp ah, 4Bh
+        je @@left
+
+        ; a
+        cmp ah, 1Eh
         je @@left
 
         ; down arrow
         cmp ah, 50h
         je @@down
 
+        ; s
+        cmp ah, 1Fh
+        je @@down
+
         ; right arrow
         cmp ah, 4Dh
+        je @@right
+
+        ; d
+        cmp ah, 20h
         je @@right
 
         jmp @@cont
@@ -2053,6 +2072,7 @@ proc HandlePlayerInput
 
     @@left:
         mov [MARIO_dir], 2
+        mov [MARIO_r_dir], 1
         jmp @@cont
 
     @@down:
@@ -2061,6 +2081,7 @@ proc HandlePlayerInput
 
     @@right:
         mov [MARIO_dir], 4
+        mov [MARIO_r_dir], 0
         jmp @@cont
 
     @@cont:
@@ -2222,7 +2243,18 @@ proc DrawMarioAt
 ;  stack - (filename asciiz offset, x, y, w, h)
     mov [BMP_skip_color], MARIO_bg
     mov [BMP_should_skip], 1
-    push offset BMP_mario
+
+    cmp [MARIO_r_dir], 1
+    je @@mario_l
+
+    push offset BMP_mario_r
+    jmp @@mario_cont
+
+    @@mario_l:
+    push offset BMP_mario_l
+
+    @@mario_cont:
+
     push x
     push y
     push MARIO_w
