@@ -8,7 +8,7 @@ FLOOR_x  equ 320 / 2
 
 MARIO_w  equ 11
 MARIO_h  equ 15
-MARIO_bg equ 255 ; 255
+MARIO_bg equ 255
 
 ALIEN_h  equ 15
 ALIEN_w  equ 15
@@ -49,6 +49,7 @@ DATASEG
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     FLAG_should_setup_game db 0
+    FLAG_should_exit_game  db 0
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -86,56 +87,55 @@ DATASEG
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    BMP_line        db 320 dup (0)
-    BMP_screen_line db 324 dup (0)
+    BMP_line         db 320 dup (0)
+    BMP_screen_line  db 324 dup (0)
 
-    BMP_starting       db 'start.bmp', 0
-    BMP_cycles         db 'cycles.bmp' , 0
-    BMP_menu           db 'menu.bmp' , 0
-    BMP_menu_guide     db 'menug.bmp' , 0
-    BMP_menu_play      db 'menup.bmp' , 0
-    BMP_go             db 'go.bmp' , 0
-    BMP_go_exit        db 'goe.bmp' , 0
-    BMP_go_play        db 'gop.bmp' , 0
-    BMP_guide          db 'guide.bmp' , 0
-    BMP_tools_bg       db 'toolsbg.bmp' , 0
-    BMP_robot          db 'robot.bmp' , 0
-    BMP_robot_d        db 'robotd.bmp' , 0
-    BMP_mario          db 'mario.bmp' , 0
-    BMP_landmine       db 'grnd.bmp' , 0
-    BMP_landmine_d     db 'grndd.bmp' , 0
-    BMP_black_hole     db 'bh.bmp' , 0
-    BMP_black_hole_d   db 'bhd.bmp' , 0
-    BMP_alien          db 'alien.bmp' , 0
-    BMP_alien_d        db 'aliend.bmp' , 0
-    BMP_star           db 'star.bmp', 0
-    BMP_sky            db 'sky.bmp' , 0
+    BMP_starting     db 'start.bmp', 0
+    BMP_cycles       db 'cycles.bmp' , 0
+    BMP_menu         db 'menu.bmp' , 0
+    BMP_menu_guide   db 'menug.bmp' , 0
+    BMP_menu_play    db 'menup.bmp' , 0
+    BMP_go           db 'go.bmp' , 0
+    BMP_go_exit      db 'goe.bmp' , 0
+    BMP_go_play      db 'gop.bmp' , 0
+    BMP_guide        db 'guide.bmp' , 0
+    BMP_tools_bg     db 'toolsbg.bmp' , 0
+    BMP_robot        db 'robot.bmp' , 0
+    BMP_robot_d      db 'robotd.bmp' , 0
+    BMP_mario        db 'mario.bmp' , 0
+    BMP_landmine     db 'grnd.bmp' , 0
+    BMP_landmine_d   db 'grndd.bmp' , 0
+    BMP_black_hole   db 'bh.bmp' , 0
+    BMP_black_hole_d db 'bhd.bmp' , 0
+    BMP_alien        db 'alien.bmp' , 0
+    BMP_alien_d      db 'aliend.bmp' , 0
+    BMP_star         db 'star.bmp', 0
+    BMP_sky          db 'sky.bmp' , 0
 
-    BMP_handle     dw ?
-    BMP_header     db 54 dup(0)
-    BMP_palette    db 400h dup(0)
-
-    BMP_error_file         db 0
+    BMP_handle       dw ?
+    BMP_header       db 54 dup(0)
+    BMP_palette      db 400h dup(0)
+    BMP_error_file   db 0
 
     BMP_x dw ?
     BMP_y dw ?
     BMP_w dw ?
     BMP_h dw ?
 
-    BMP_skip_color     db 0
-    BMP_should_skip    db 0
+    BMP_skip_color   db 0
+    BMP_should_skip  db 0
 
-    BMP_dragging       db 0
-    BMP_dragging_x     dw 0
-    BMP_dragging_y     dw 0
-    BMP_dragging_ptr   dw 0
+    BMP_dragging     db 0
+    BMP_dragging_x   dw 0
+    BMP_dragging_y   dw 0
+    BMP_dragging_ptr dw 0
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    LANDMINE_is_placed    db 0
-    LANDMINE_did_explode  db 0
-    LANDMINE_x            dw 0
-    LANDMINE_y            dw 0
+    LANDMINE_is_placed   db 0
+    LANDMINE_did_explode db 0
+    LANDMINE_x           dw 0
+    LANDMINE_y           dw 0
 
     BLACK_HOLE_is_placed   db 0
     BLACK_HOLE_is_inactive db 0
@@ -156,6 +156,10 @@ DATASEG
 
     rnd_pos dw start
 
+SEGMENT SCREEN
+    s db 320 * 200 dup(0)
+ENDS
+
 CODESEG
 
 start:
@@ -168,7 +172,6 @@ start:
     mov ax, 13h
     int 10h
 
-    call SavePalette
     call HideCursor
 
     push offset BMP_starting
@@ -177,6 +180,8 @@ start:
     push 320
     push 200
     call RenderBmp
+
+    call UpdateScreen
 
     mov ax, 40h
     mov es, ax
@@ -207,6 +212,8 @@ skip_err:
     mov [GAME_state], 0
     call ShowCursor
 
+    call UpdateScreen
+
     l:
         call OnGameTick
     jmp l
@@ -218,6 +225,7 @@ cpu_cycles_error:
     push 320
     push 200
     call RenderBmp
+    call UpdateScreen
     call AwaitKeypress
 
     call ExitGame
@@ -484,6 +492,11 @@ proc OnCursorEvent far
     push bx
     push cx
     push dx
+    push ds
+    push di
+
+    mov di, @data
+    mov ds, di
 
     shr cx, 1
 
@@ -572,7 +585,7 @@ proc OnCursorEvent far
     call ViewGuide
     jmp @@cont_menu_exit
     @@menu_exit:
-    call ExitGame
+    mov [FLAG_should_exit_game], 1
     @@cont_menu_exit:
     jmp @@cont
 
@@ -591,6 +604,7 @@ proc OnCursorEvent far
         push 320
         push 200
         call RenderBmp
+        call UpdateScreen
 
         cmp [GAME_is_over], 1
         jne @@ret
@@ -698,6 +712,8 @@ proc OnCursorEvent far
                 call DrawAllSprites
                 call DrawDraggedBmp
 
+                call UpdateScreen
+
                 mov [BMP_dragging_x], cx
                 mov [BMP_dragging_y], dx
 
@@ -712,6 +728,8 @@ proc OnCursorEvent far
     @@ret:
         call ShowCursor
 
+        pop di
+        pop ds
         pop dx
         pop cx
         pop bx
@@ -849,106 +867,6 @@ proc DrawBackground
 
         ret
 
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: SavePalette
-;
-; Arguments:
-; none
-;
-; Returns:
-; none
-;
-; Description:
-; saves dos 256 color pallete
-;
-; Register usage:
-; none
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-proc SavePalette
-    push ax
-    push bx
-    push cx
-    push dx
-    push es
-    push di
-    push si
-
-    lea bx, [GAME_palette]
-    xor al, al
-    xor si, si
-    mov dx, 3C8h
-    out dx, al
-    mov dx, 3C9h
-    mov cx, 300h
-    @@save_loop:
-        in al, dx
-        mov [bx + si], al
-        inc si
-    loop @@save_loop
-
-    @@ret:
-        pop si
-        pop di
-        pop es
-        pop dx
-        pop cx
-        pop bx
-        pop ax
-
-        ret
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: RestorePalette
-;
-; Arguments:
-; none
-;
-; Returns:
-; none
-;
-; Description:
-; restores dos 256 color pallete
-;
-; Register usage:
-; none
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-proc RestorePalette
-    push ax
-    push bx
-    push cx
-    push dx
-    push es
-    push di
-    push si
-
-    lea bx, [GAME_palette]
-    xor si, si
-    mov dx, 3C8h
-    mov al, 0
-    out dx, al
-
-    mov dx, 3C9h
-    mov cx, 300h
-    @@restore_loop:
-        mov al, [bx + si]
-        out dx, al
-        inc si
-    loop @@restore_loop
-
-    pop si
-    pop di
-    pop es
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-
-    @@ret:
-        ret
 endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1223,7 +1141,6 @@ endp
 proc SetupGame
     mov [GAME_state], 10
     call DrawBackground
-    call RestorePalette
 
     mov ax, [MARIO_i_x]
     mov [MARIO_x], ax
@@ -1309,6 +1226,7 @@ proc ViewGuide
     push 320
     push 200
     call RenderBmp
+    call UpdateScreen
 
     @@ret:
 
@@ -1365,6 +1283,11 @@ proc OnGameTick
     jmp @@s_skip_setup_game
 
 @@s_skip_setup_game:
+    cmp [FLAG_should_exit_game], 1
+    jne @@skip_move
+
+    mov [FLAG_should_exit_game], 0
+    call ExitGame
     jmp @@skip_move
 
 @@game_tick:
@@ -1624,6 +1547,7 @@ proc OnGameTick
     call DrawBackground
     call DrawTools
     call DrawAllSprites
+    call UpdateScreen
 
 @@skip_move:
     call HandlePlayerInput
@@ -2545,7 +2469,7 @@ proc DrawMatrixAt
     push y
     call PosToOffset
 
-    mov ax, 0A000h
+    mov ax, SCREEN
     mov es, ax
     cld
 
@@ -2620,7 +2544,7 @@ proc DrawPixelAt
     call PosToOffset
     ; offset now in di
 
-    mov ax, 0A000h
+    mov ax, SCREEN
     mov es, ax
     mov bx, color
     mov [es:di], bx
@@ -2789,7 +2713,7 @@ proc DrawVerticalLine
     push y
     call PosToOffset
     ; offset now in di
-    mov ax, 0A000h
+    mov ax, SCREEN
     mov es, ax
 
     mov cx, len
@@ -2845,7 +2769,7 @@ proc DrawHorizontalLine
     push y
     call PosToOffset
     ; offset now in di
-    mov ax, 0A000h
+    mov ax, SCREEN
     mov es, ax
 
     mov cx, len
@@ -3048,7 +2972,7 @@ endp
 ; Registers:
 ;  none
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-proc MakeMask    
+proc MakeMask
     push bx
     mov si, 1
 
@@ -3083,7 +3007,7 @@ endp
 ; Registers:
 ;  none
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-proc MakeMaskWord    
+proc MakeMaskWord
     push dx
     mov si, 1
 
@@ -3099,6 +3023,54 @@ proc MakeMaskWord
 
 @@ret:
     pop dx
+    ret
+
+endp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Procedure: UpdateScreen
+;
+; Arguments:
+;  none
+;
+; Returns:
+;  none
+;
+; Description:
+;  updates screen data in SCREEN SEGMENT into 0A000h
+;
+; Registers:
+;  none
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+proc UpdateScreen
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push ds
+
+    mov ax, 0A000h
+    mov es, ax
+
+    mov ax, SCREEN
+    mov ds, ax
+    xor si, si
+    xor di, di
+
+    mov cx, 320 * 200
+    rep movsb
+
+@@ret:
+    pop ds
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+
     ret
 
 endp
@@ -3288,7 +3260,7 @@ endp CopyBmpPalette
 proc ShowBmp
     push cx
 
-    mov ax, 0A000h
+    mov ax, SCREEN
     mov es, ax
 
     mov cx, [BMP_h]
@@ -3379,7 +3351,7 @@ endp
 
 proc PutBmpDataIntoFile near
     lea dx, [BMP_line]
-    mov ax, 0A000h
+    mov ax, SCREEN
     mov es, ax
 
     mov cx, [BMP_h]
