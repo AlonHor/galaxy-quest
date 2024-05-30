@@ -34,10 +34,9 @@ DATASEG
     MENU_ticks         dw 0
 
     GAME_ticks         dw 0
-    GAME_palette       db 300h dup(?)
     GAME_state         db 30
     GAME_menu_is_hover db 0
-    GAME_score       dw 0
+    GAME_score         dw 0
     GAME_is_over       db 0
 
     ; ~~~ GAME STATES ~~~
@@ -54,12 +53,12 @@ DATASEG
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     ALIEN_is_alive   db 1
-    ALIEN_death      dw 0
+    ALIEN_death_time dw 0
     ROBOT_is_alive   db 1
-    ROBOT_death      dw 0
+    ROBOT_death_time dw 0
 
-    BLACK_HOLE_death dw 0
-    LANDMINE_death   dw 0
+    BLACK_HOLE_death_time dw 0
+    LANDMINE_death_time   dw 0
 
     MARIO_i_x   dw FLOOR_x - (MARIO_w / 2)
     MARIO_i_y   dw FLOOR_y - (MARIO_h / 2)
@@ -100,7 +99,6 @@ DATASEG
     BMP_go_exit      db 'goe.bmp' , 0
     BMP_go_play      db 'gop.bmp' , 0
     BMP_guide        db 'guide.bmp' , 0
-    BMP_tools_bg     db 'toolsbg.bmp' , 0
     BMP_robot        db 'robot.bmp' , 0
     BMP_robot_d      db 'robotd.bmp' , 0
     BMP_mario_r      db 'marior.bmp' , 0
@@ -144,8 +142,9 @@ DATASEG
     BLACK_HOLE_x           dw 0
     BLACK_HOLE_y           dw 0
 
-    STAR_x dw 0
-    STAR_y dw 0
+    STAR_x         dw 0
+    STAR_y         dw 0
+    STAR_last_time dw 0
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -849,11 +848,6 @@ proc DrawBackground
     push cx
     push dx
 
-    ; push 0
-    ; push GAME_t + 1
-    ; push GAME_w * (GAME_h - GAME_t - 1)
-    ; push BG
-    ; call DrawHorizontalLine
     push offset BMP_sky
     push 0
     push GAME_t
@@ -888,17 +882,11 @@ endp
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 proc AwaitKeypress
     push ax
-    push bx
-    push cx
-    push dx
 
     mov ah, 1
     int 21h
 
     @@ret:
-        pop dx
-        pop cx
-        pop bx
         pop ax
 
         ret
@@ -1151,6 +1139,7 @@ proc SetupGame
     mov al, [MARIO_i_dir]
     mov [MARIO_dir], al
     mov [MARIO_r_dir], 0
+    mov [MARIO_speed], 3
 
     mov ax, [ALIEN_i_x]
     mov [ALIEN_x], ax
@@ -1158,6 +1147,7 @@ proc SetupGame
     mov [ALIEN_y], ax
     mov al, [ALIEN_i_dir]
     mov [ALIEN_dir], al
+    mov [ALIEN_speed], 2
 
     mov ax, [ROBOT_i_x]
     mov [ROBOT_x], ax
@@ -1165,11 +1155,14 @@ proc SetupGame
     mov [ROBOT_y], ax
     mov al, [ROBOT_i_dir]
     mov [ROBOT_dir], al
+    mov [ROBOT_speed], 5
 
     mov [ALIEN_is_alive], 1
-    mov [ALIEN_death], 0
+    mov [ALIEN_death_time], 0
     mov [ROBOT_is_alive], 1
-    mov [ROBOT_death], 0
+    mov [ROBOT_death_time], 0
+    mov [LANDMINE_death_time], 0
+    mov [BLACK_HOLE_death_time], 0
 
     mov [BMP_skip_color], 0
     mov [BMP_should_skip], 0
@@ -1191,11 +1184,13 @@ proc SetupGame
 
     mov [STAR_x], 0
     mov [STAR_y], 0
+    mov [STAR_last_time], 0
 
     mov [GAME_is_over], 0
 
     call OnStarCollision
     mov [GAME_score], 0
+    mov [MARIO_speed], 3
 
     call DrawTools
 
@@ -1760,7 +1755,7 @@ proc OnGameTick
         mov ax, 40h
         mov es, ax
         mov ax, [es:6Ch]
-        mov [LANDMINE_death], ax
+        mov [LANDMINE_death_time], ax
         jmp @@kill_alien
 
     @@kill_alien_black_hole:
@@ -1778,7 +1773,7 @@ proc OnGameTick
         mov ax, 40h
         mov es, ax
         mov ax, [es:6Ch]
-        mov [BLACK_HOLE_death], ax
+        mov [BLACK_HOLE_death_time], ax
         jmp @@kill_alien
 
     @@kill_robot_landmine:
@@ -1796,7 +1791,7 @@ proc OnGameTick
         mov ax, 40h
         mov es, ax
         mov ax, [es:6Ch]
-        mov [LANDMINE_death], ax
+        mov [LANDMINE_death_time], ax
         jmp @@kill_robot
 
     @@kill_robot_black_hole:
@@ -1814,7 +1809,7 @@ proc OnGameTick
         mov ax, 40h
         mov es, ax
         mov ax, [es:6Ch]
-        mov [BLACK_HOLE_death], ax
+        mov [BLACK_HOLE_death_time], ax
         jmp @@kill_robot
 
     @@kill_alien:
@@ -1823,7 +1818,7 @@ proc OnGameTick
         mov ax, 40h
         mov es, ax
         mov ax, [es:6Ch]
-        mov [ALIEN_death], ax
+        mov [ALIEN_death_time], ax
 
         jmp @@ret
 
@@ -1833,7 +1828,7 @@ proc OnGameTick
         mov ax, 40h
         mov es, ax
         mov ax, [es:6Ch]
-        mov [ROBOT_death], ax
+        mov [ROBOT_death_time], ax
         jmp @@ret
 
     @@ret:
@@ -1886,7 +1881,7 @@ proc DrawAllSprites
     mov ax, 40h
     mov es, ax
     mov ax, [es:6Ch]
-    sub ax, [ALIEN_death]
+    sub ax, [ALIEN_death_time]
     cmp ax, 100
     jl @@skip_alien_dead
     mov [ALIEN_is_alive], 1
@@ -1913,7 +1908,7 @@ proc DrawAllSprites
     mov ax, 40h
     mov es, ax
     mov ax, [es:6Ch]
-    sub ax, [ROBOT_death]
+    sub ax, [ROBOT_death_time]
     cmp ax, 100
     jl @@skip_robot_dead
     mov [ROBOT_is_alive], 1
@@ -1942,7 +1937,7 @@ proc DrawAllSprites
     mov ax, 40h
     mov es, ax
     mov ax, [es:6Ch]
-    sub ax, [LANDMINE_death]
+    sub ax, [LANDMINE_death_time]
     cmp ax, 200
     jl @@skip_landmine
     mov [LANDMINE_is_placed], 0
@@ -1972,7 +1967,7 @@ proc DrawAllSprites
     mov ax, 40h
     mov es, ax
     mov ax, [es:6Ch]
-    sub ax, [BLACK_HOLE_death]
+    sub ax, [BLACK_HOLE_death_time]
     cmp ax, 200
     jl @@skip_black_hole
     mov [BLACK_HOLE_is_inactive], 0
@@ -1985,6 +1980,18 @@ proc DrawAllSprites
     push OBJ_w
     push OBJ_h
     call RenderBmp
+
+    mov ax, 40h
+    mov es, ax
+    mov ax, [es:6Ch]
+    sub ax, [STAR_last_time]
+    cmp ax, 20
+    jl @@skip_speed_decrease
+    cmp [MARIO_speed], 3
+    jle @@skip_speed_decrease
+    mov [MARIO_speed], 3
+
+    @@skip_speed_decrease:
 
     @@ret:
 
@@ -2016,8 +2023,7 @@ proc HandlePlayerInput
     ; check if key in buffer
     mov ah, 1
     int 16h
-    jnz @@key_pressed
-    jmp @@ret ; continue
+    jz @@ret ; continue
 
     @@key_pressed:
         ; read key from buffer
@@ -2259,8 +2265,6 @@ proc DrawMarioAt
     push y
     push MARIO_w
     push MARIO_h
-    ; push offset mario
-    ; call DrawMatrixAt
     call RenderBmp
 
 @@ret:
@@ -2369,58 +2373,6 @@ proc DrawAlienAt
 endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawPixelLineAt
-;
-; Arguments:
-;  stack - (x, y, offset, length, color)
-;
-; Returns:
-;  none
-;
-; Description:
-;  none
-;
-; Registers:
-;  none
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-x     equ [word bp + 12]
-y     equ [word bp + 10]
-off   equ [word bp + 8 ]
-len   equ [word bp + 6 ]
-color equ [word bp + 4 ]
-proc DrawPixelLineAt
-    push bp
-    mov bp, sp
-
-    push ax
-    push bx
-    push cx
-    push dx
-
-    mov cx, len
-    mov ax, off
-    add x, ax
-
-    @@l:
-        push x
-        push y
-        push color
-        call DrawPixelAt
-        inc x
-    loop @@l
-
-@@ret:
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-
-    pop bp
-    ret 10
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Procedure: PosToOffset
 ;
 ; Arguments:
@@ -2463,307 +2415,6 @@ proc PosToOffset
 
     pop bp
     ret 4
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawMatrixAt
-;
-; Arguments:
-;  stack - (offset of matrix, x, y, width, height)
-;
-; Returns:
-;  none
-;
-; Description:
-;  none
-;
-; Registers:
-;  none
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-matrix equ [word bp + 12]
-x      equ [word bp + 10]
-y      equ [word bp + 8 ]
-w      equ [word bp + 6 ]
-h      equ [word bp + 4 ]
-proc DrawMatrixAt
-    push bp
-    mov bp, sp
-
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-
-    push x
-    push y
-    call PosToOffset
-
-    mov ax, SCREEN
-    mov es, ax
-    cld
-
-    mov si, matrix
-    
-    mov cx, h
-    mov dx, w
-    @@l:
-        push cx
-        mov cx, dx
-
-        @@l2:
-            mov al, [si]
-            cmp [BMP_should_skip], 1
-            jne @@skip_skip_color
-            cmp al, [BMP_skip_color]
-            je @@cont
-            @@skip_skip_color:
-            mov [es:di], al
-
-            @@cont:
-                inc si
-                inc di
-        loop @@l2
-
-        sub di, dx
-        add di, GAME_w
-        pop cx
-    loop @@l
-
-@@ret:
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-
-    pop bp
-    ret 10
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawPixelAt
-;
-; Arguments:
-;  stack - (x, y, color)
-;
-; Returns:
-;  none
-;
-; Description:
-;  none
-;
-; Registers:
-;  cx - loop
-;  si - draw index
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-x     equ [word bp + 8]
-y     equ [word bp + 6]
-color equ [word bp + 4]
-proc DrawPixelAt
-    push bp
-    mov bp, sp
-
-    push ax
-    push bx
-
-    push x
-    push y
-    call PosToOffset
-    ; offset now in di
-
-    mov ax, SCREEN
-    mov es, ax
-    mov bx, color
-    mov [es:di], bx
-
-@@ret:
-    pop bx
-    pop ax
-
-    pop bp
-    ret 6
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawFilledRect
-;
-; Arguments:
-;  stack - (x, y, width, height, color)
-;
-; Returns:
-;  none
-;
-; Description:
-;  none
-;
-; Registers:
-;  cx - loop
-;  si - draw index
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-x     equ [word bp + 12]
-y     equ [word bp + 10]
-w     equ [word bp + 8 ]
-h     equ [word bp + 6 ]
-color equ [word bp + 4 ]
-proc DrawFilledRect
-    push bp
-    mov bp, sp
-
-    push si
-    push cx
-
-    mov cx, w
-    mov si, x
-
-    @@draw_loop:
-        push si
-        push y
-        push h
-        push color
-        call DrawVerticalLine
-        inc si
-    loop @@draw_loop
-
-@@ret:
-    pop cx
-    pop si
-
-    pop bp
-    ret 10
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawRect
-;
-; Arguments:
-;  stack - (x, y, width, height, color)
-;
-; Returns:
-;  none
-;
-; Description:
-;  none
-;
-; Registers:
-;  ax - width
-;  bx - height
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-x     equ [word bp + 12]
-y     equ [word bp + 10]
-w     equ [word bp + 8 ]
-h     equ [word bp + 6 ]
-color equ [word bp + 4 ]
-proc DrawRect
-    push bp
-    mov bp, sp
-
-    push ax
-    push bx
-
-    mov ax, w
-    mov bx, h
-
-    push x
-    push y
-    push w
-    push color
-    call DrawHorizontalLine
-
-    add y, bx
-
-    push x
-    push y
-    push w
-    push color
-    call DrawHorizontalLine
-
-    sub y, bx
-
-    push x
-    push y
-    push h
-    push color
-    call DrawVerticalLine
-
-    add x, ax
-    inc h
-    dec y
-
-    push x
-    push y
-    push h
-    push color
-    call DrawVerticalLine
-
-@@ret:
-    pop bx
-    pop ax
-
-    pop bp
-    ret 10
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawVerticalLine
-;
-; Arguments:
-;  stack - (x, y, length, color)
-;
-; Returns:
-;  none
-;
-; Description:
-;  none
-;
-; Registers:
-;  cx - loop
-;  si - draw index
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-x     equ [word bp + 10]
-y     equ [word bp + 8 ]
-len   equ [word bp + 6 ]
-color equ [word bp + 4 ]
-proc DrawVerticalLine
-    push bp
-    mov bp, sp
-
-    push si
-    push ax
-    push bx
-    push cx
-    push dx
-
-    push x
-    push y
-    call PosToOffset
-    ; offset now in di
-    mov ax, SCREEN
-    mov es, ax
-
-    mov cx, len
-    @@draw_loop:
-        mov ax, color
-        mov [es:di], ax
-        add di, 320
-        loop @@draw_loop
-
-@@ret:
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    pop si
-
-    pop bp
-    ret 8
 
 endp
 
@@ -2855,6 +2506,12 @@ proc OnStarCollision
     mov [STAR_y], ax
 
     inc [GAME_score]
+    add [MARIO_speed], 2
+
+    mov ax, 40h
+    mov es, ax
+    mov ax, [es:6Ch]
+    mov [STAR_last_time], ax
 
 @@ret:
     pop dx
