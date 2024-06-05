@@ -39,11 +39,8 @@ DATASEG
     GAME_score         dw 0
     GAME_is_over       db 0
 
-    ; ~~~ GAME STATES ~~~
-    ; 0 - main menu
-    ;   1 - guide
-    ; 10 - game
-    ; 30 - starting
+    CURSOR_x         dw 0
+    CURSOR_y         dw 0
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -126,8 +123,6 @@ DATASEG
     BMP_should_skip  db 0
 
     BMP_dragging     db 0
-    BMP_dragging_x   dw 0
-    BMP_dragging_y   dw 0
     BMP_dragging_ptr dw 0
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -276,8 +271,9 @@ proc RenderBmp
     jmp @@exit_error
 
     @@exit_error:
-        push offset ERROR_opening_bmp_file
-        call HandleError
+        jmp @@ret
+        ; push offset ERROR_opening_bmp_file
+        ; call HandleError
 
     @@exit:
         call ExitGame
@@ -647,9 +643,9 @@ proc OnCursorEvent far
             cmp [LANDMINE_is_placed], 1
             je @@not_landmine
 
+            mov [CURSOR_x], cx
+            mov [CURSOR_y], dx
             mov [BMP_dragging], 1
-            mov [BMP_dragging_x], cx
-            mov [BMP_dragging_y], dx
             mov [BMP_dragging_ptr], offset BMP_landmine
 
             @@not_landmine:
@@ -670,9 +666,9 @@ proc OnCursorEvent far
             cmp [BLACK_HOLE_is_placed], 1
             je @@not_black_hole
 
+            mov [CURSOR_x], cx
+            mov [CURSOR_y], dx
             mov [BMP_dragging], 1
-            mov [BMP_dragging_x], cx
-            mov [BMP_dragging_y], dx
             mov [BMP_dragging_ptr], offset BMP_black_hole
 
             @@not_black_hole:
@@ -689,6 +685,8 @@ proc OnCursorEvent far
             cmp [BMP_dragging_ptr], offset BMP_landmine
             jne @@check_black_hole_release
             mov [LANDMINE_is_placed], 1
+            sub cx, OBJ_W / 2
+            sub dx, OBJ_H / 2
             mov [LANDMINE_x], cx
             mov [LANDMINE_y], dx
 
@@ -696,6 +694,8 @@ proc OnCursorEvent far
             cmp [BMP_dragging_ptr], offset BMP_black_hole
             jne @@ret
             mov [BLACK_HOLE_is_placed], 1
+            sub cx, OBJ_W / 2
+            sub dx, OBJ_H / 2
             mov [BLACK_HOLE_x], cx
             mov [BLACK_HOLE_y], dx
 
@@ -706,17 +706,10 @@ proc OnCursorEvent far
         @@not_left_release:
         cmp ax, 1b ; pos change
         jne @@not_pos_change
-            cmp [BMP_dragging], 0
-            je @@ret
-                call DrawTools
-                call DrawBackground
-                call DrawAllSprites
-                call DrawDraggedBmp
-
-                call UpdateScreen
-
-                mov [BMP_dragging_x], cx
-                mov [BMP_dragging_y], dx
+            sub cx, OBJ_W / 2
+            sub dx, OBJ_H / 2
+            mov [CURSOR_x], cx
+            mov [CURSOR_y], dx
 
         jmp @@ret
 
@@ -951,42 +944,6 @@ proc ExitGame
 endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: DrawDraggedBmp
-;
-; Arguments:
-;  none
-;
-; Returns:
-;  none
-;
-; Description:
-;  draws dragged bmp on screen
-;
-; Register usage:
-;  none
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-proc DrawDraggedBmp
-    mov [BMP_should_skip], 1
-    mov [BMP_skip_color], OBJ_bg
-
-    call HideCursor
-
-    push [BMP_dragging_ptr]
-    push [BMP_dragging_x]
-    push [BMP_dragging_y]
-    push OBJ_w
-    push OBJ_h
-    call RenderBmp
-
-    call ShowCursor
-
-    @@ret:
-
-        ret
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Procedure: DrawLandmineInTools
 ;
 ; Arguments:
@@ -1168,8 +1125,8 @@ proc SetupGame
     mov [BMP_should_skip], 0
 
     mov [BMP_dragging], 0
-    mov [BMP_dragging_x], 0
-    mov [BMP_dragging_y], 0
+    mov [CURSOR_x], 0
+    mov [CURSOR_y], 0
     mov [BMP_dragging_ptr], 0
 
     mov [LANDMINE_is_placed], 0
@@ -1293,7 +1250,7 @@ proc OnGameTick
     xor ah, ah
     mov ax, GAME_mpt
     cmp [GAME_ticks], ax
-    jnae @@jmp_to_skip_move
+    jnae @@skip_move
 
     ; move alien towards mario by:
     ; 1. comparing distance of X to the distance in Y
@@ -1315,9 +1272,6 @@ proc OnGameTick
     jg @@skip_neg_y
     neg bx
     jmp @@skip_neg_y
-
-    @@jmp_to_skip_move:
-        jmp @@skip_move
 
     @@skip_neg_y:
 
@@ -1362,7 +1316,7 @@ proc OnGameTick
     je @@down
 
     cmp [MARIO_dir], 4
-    jne @@jmp_to_cont
+    jne @@cont
 
     jmp @@right
 
@@ -1384,9 +1338,6 @@ proc OnGameTick
 
         mov ax, [MARIO_speed]
         sub [MARIO_x], ax
-        jmp @@cont
-
-    @@jmp_to_cont:
         jmp @@cont
 
     @@down:
@@ -1992,6 +1943,25 @@ proc DrawAllSprites
     mov [MARIO_speed], 3
 
     @@skip_speed_decrease:
+
+    cmp [BMP_dragging], 1
+    jne @@skip_drag
+
+    mov [BMP_should_skip], 1
+    mov [BMP_skip_color], OBJ_bg
+
+    call HideCursor
+
+    push [BMP_dragging_ptr]
+    push [CURSOR_x]
+    push [CURSOR_y]
+    push OBJ_w
+    push OBJ_h
+    call RenderBmp
+
+    jmp @@skip_drag
+
+    @@skip_drag:
 
     @@ret:
 
@@ -2740,6 +2710,8 @@ proc UpdateScreen
     push di
     push ds
 
+    call HideCursor
+
     mov ax, 0A000h
     mov es, ax
 
@@ -2750,6 +2722,8 @@ proc UpdateScreen
 
     mov cx, 320 * 200
     rep movsb
+
+    call ShowCursor
 
 @@ret:
     pop ds
