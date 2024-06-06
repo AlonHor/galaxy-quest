@@ -523,10 +523,8 @@ proc OnCursorEvent far
 @@main_menu:
     inc [MENU_ticks]
     cmp [MENU_ticks], MENU_mpt
-    je @@s_skip_main_menu
-    jmp @@skip_main_menu
+    jne @@skip_main_menu
 
-@@s_skip_main_menu:
     mov [MENU_ticks], 0
 
     cmp cx, 105
@@ -698,8 +696,6 @@ proc OnCursorEvent far
             sub dx, OBJ_H / 2
             mov [BLACK_HOLE_x], cx
             mov [BLACK_HOLE_y], dx
-
-            call DrawTools
 
         jmp @@ret
 
