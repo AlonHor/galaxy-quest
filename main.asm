@@ -340,68 +340,6 @@ proc ClearScreen
 endp
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Procedure: Instantiate
-;
-; Arguments:
-;  stack - (INFO_max_?s, INFO_?_struct_size, offset DATA_?_list, offset TMP_current_?)
-;
-; Returns:
-;  none
-;
-; Description:
-;  creates an instance of an object
-;
-; Register usage:
-;  none
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-max         equ [word bp + 10]
-struct_size equ [word bp + 8 ]
-list        equ [word bp + 6 ]
-current     equ [word bp + 4 ]
-proc Instantiate
-    push bp
-    mov bp, sp
-
-    push ax
-    push bx
-    push cx
-    push dx
-
-    @@create_instace:
-        mov cx, max
-        mov si, list
-        @@find_empty_slot:
-            mov bl, [si]
-            cmp bl, 0
-            je @@slot_found
-            add si, struct_size
-        loop @@find_empty_slot
-
-    push offset ERROR_too_many_instances
-    call HandleError
-
-    @@slot_found:
-        mov cx, struct_size
-        mov bx, current
-        @@copy:
-            mov ax, [bx]
-            mov [si], ax
-            inc bx
-            inc si
-        loop @@copy
-
-@@ret:
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-
-    pop bp
-    ret 8
-
-endp
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Procedure: ShowCursor
 ;
 ; Arguments:
