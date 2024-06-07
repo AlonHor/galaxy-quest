@@ -764,7 +764,7 @@ endp
 ;  none
 ;
 ; Description:
-;  draws black background
+;  draws sky background
 ;
 ; Register usage:
 ;  none
@@ -856,7 +856,7 @@ endp
 ;  none
 ;
 ; Description:
-;  exit game
+;  exits game
 ;
 ; Register usage:
 ;  none
@@ -1014,7 +1014,7 @@ endp
 ;  none
 ;
 ; Description:
-;  setups game
+;  sets up game
 ;
 ; Register usage:
 ;  none
@@ -2059,7 +2059,7 @@ endp
 ;  di - 1 if collision, 0 if no collision
 ;
 ; Description:
-;  draws mario at given position
+;  returns whether two sprites are colliding
 ;
 ; Registers:
 ;  none
@@ -2332,7 +2332,7 @@ endp
 ;  none
 ;
 ; Description:
-;  none
+;  draws a horizontal line
 ;
 ; Registers:
 ;  cx - loop
@@ -2438,7 +2438,7 @@ endp
 ;  al - random number in that range
 ;
 ; Description:
-;  generate a random byte using cs and timer
+;  generates a random byte using cs and timer
 ;
 ; Registers:
 ;  none
@@ -2497,7 +2497,7 @@ endp
 ;  ax - random number in that range
 ;
 ; Description:
-;  generate a random word using cs and timer
+;  generates a random word using cs and timer
 ;
 ; Registers:
 ;  none
@@ -2630,7 +2630,7 @@ endp
 ;  none
 ;
 ; Description:
-;  updates screen data in SCREEN SEGMENT into 0A000h
+;  copies screen data in SCREEN SEGMENT into 0A000h
 ;
 ; Registers:
 ;  none
@@ -2682,7 +2682,7 @@ endp
 ;  none
 ;
 ; Description:
-;  print value in ax as decimal
+;  prints value in ax as decimal
 ;
 ; Registers:
 ;  none
