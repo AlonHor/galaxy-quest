@@ -1938,7 +1938,7 @@ proc HandlePlayerInput
         cmp ax, 011Bh
         je @@exit_game
 
-        ; avoid changing  anything when game is not running
+        ; avoid changing anything when game is not running
         cmp [GAME_state], 10
         jne @@cont
 
